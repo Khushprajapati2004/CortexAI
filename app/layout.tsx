@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { SidebarProvider } from '../context/SidebarContext';
 import { Providers } from './providers';
+import SessionProvider from '@/components/SessionProvider'
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,7 +24,9 @@ export default function RootLayout({
         <SidebarProvider>
           <div className="min-h-screen bg-white">
             <Providers>
-              {children}
+              <SessionProvider>
+                {children}
+              </SessionProvider>
             </Providers>
           </div>
         </SidebarProvider>

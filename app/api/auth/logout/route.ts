@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
         // Delete session
         await prisma.session.deleteMany({
-          where: { token: refreshToken },
+          where: { sessionToken: refreshToken },
         })
       } catch {
         // Token verification failed, continue with logout

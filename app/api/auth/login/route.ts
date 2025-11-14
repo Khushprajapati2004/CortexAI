@@ -63,12 +63,12 @@ export async function POST(request: NextRequest) {
       data: { isLoggedIn: true },
     });
 
-    // Create session
+    // Create session - FIXED: Use sessionToken instead of token
     await prisma.session.create({
       data: {
         userId: user.id,
-        token: refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        sessionToken: refreshToken, // Changed from 'token' to 'sessionToken'
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
 
@@ -85,15 +85,17 @@ export async function POST(request: NextRequest) {
     response.cookies.set('auth-token', authToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 15 * 60, // 15 minutes
+      path: '/',
     });
 
     response.cookies.set('refresh-token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax', // Changed from 'strict' to 'lax'
       maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: '/',
     });
 
     return response;
