@@ -3,9 +3,14 @@
 import { ArrowLeft, Eye, EyeOff, Github } from 'lucide-react'
 import Link from 'next/link'
 import React, { useState, ChangeEvent, FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 
 const Login = () => {
     const [showPassword, setShowPassword] = useState<boolean>(false)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string>('')
+    const router = useRouter()
+
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -16,12 +21,37 @@ const Login = () => {
             ...formData,
             [e.target.name]: e.target.value
         })
+        setError('')
     }
 
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        // Handle login submission here
-        console.log('Login submitted:', formData)
+        setIsLoading(true)
+        setError('')
+
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Login failed')
+            }
+
+            // Redirect to home page on successful login
+            router.push('/')
+            
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Login failed')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -49,6 +79,12 @@ const Login = () => {
 
                 {/* Login Form */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                            {error}
+                        </div>
+                    )}
+                    
                     <form className="space-y-5" onSubmit={handleSubmit}>
                         {/* Email Field */}
                         <div>
@@ -64,6 +100,7 @@ const Login = () => {
                                 className="w-full text-sm px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-1 focus:ring-white focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 outline-none"
                                 placeholder="Enter your email"
                                 required
+                                disabled={isLoading}
                             />
                         </div>
 
@@ -82,11 +119,13 @@ const Login = () => {
                                     className="w-full text-sm px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-1 focus:ring-white focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 pr-12 outline-none"
                                     placeholder="Enter your password"
                                     required
+                                    disabled={isLoading}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                                    disabled={isLoading}
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -100,6 +139,7 @@ const Login = () => {
                                     type="checkbox"
                                     id="remember"
                                     className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    disabled={isLoading}
                                 />
                                 <label htmlFor="remember" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                     Remember me
@@ -116,9 +156,10 @@ const Login = () => {
                         {/* Login Button */}
                         <button
                             type="submit"
-                            className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200"
+                            disabled={isLoading}
+                            className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                         >
-                            Sign In
+                            {isLoading ? 'Signing In...' : 'Sign In'}
                         </button>
                     </form>
 

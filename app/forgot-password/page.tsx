@@ -1,3 +1,4 @@
+// app/forgot-password/page.tsx
 "use client"
 
 import { ArrowLeft, Mail } from 'lucide-react'
@@ -6,17 +7,44 @@ import React, { useState, ChangeEvent, FormEvent } from 'react'
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState<string>('')
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string>('')
     const [isSubmitted, setIsSubmitted] = useState<boolean>(false)
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         setEmail(e.target.value)
+        setError('')
     }
 
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        // Handle password reset request here
-        console.log('Password reset requested for:', email)
-        setIsSubmitted(true)
+        setIsLoading(true)
+        setError('')
+
+        try {
+            const response = await fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to send reset instructions')
+            }
+
+            // Store email in localStorage before redirecting
+            localStorage.setItem('resetEmail', email)
+            setIsSubmitted(true)
+            
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to send reset instructions')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -44,6 +72,12 @@ const ForgotPassword = () => {
 
                 {/* Forgot Password Form */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                            {error}
+                        </div>
+                    )}
+
                     {!isSubmitted ? (
                         <>
                             <div className="text-center mb-6">
@@ -75,18 +109,18 @@ const ForgotPassword = () => {
                                         className="w-full text-sm px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-1 focus:ring-white focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 outline-none"
                                         placeholder="Enter your email address"
                                         required
+                                        disabled={isLoading}
                                     />
                                 </div>
 
                                 {/* Submit Button */}
-                                <Link href="/verify-otp">
-                                    <button
-                                        type="submit"
-                                        className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200"
-                                    >
-                                        Send Reset Instructions
-                                    </button>
-                                </Link>
+                                <button
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                                >
+                                    {isLoading ? 'Sending...' : 'Send Reset Instructions'}
+                                </button>
                             </form>
                         </>
                     ) : (
@@ -104,18 +138,22 @@ const ForgotPassword = () => {
                                 We{"'"}ve sent password reset instructions to <span className="font-medium text-gray-800 dark:text-white">{email}</span>
                             </p>
                             <div className="space-y-4">
-                                <button
-                                    onClick={() => setIsSubmitted(false)}
-                                    className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200"
-                                >
-                                    Resend Email
-                                </button>
                                 <Link
-                                    href="/login"
-                                    className="block w-full text-center border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200"
+                                    href="/verify-otp"
+                                    className="block w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 text-center"
                                 >
-                                    Back to Login
+                                    Enter OTP
                                 </Link>
+                                <button
+                                    onClick={() => {
+                                        setIsSubmitted(false)
+                                        setEmail('')
+                                        localStorage.removeItem('resetEmail')
+                                    }}
+                                    className="w-full border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200"
+                                >
+                                    Use Different Email
+                                </button>
                             </div>
                         </div>
                     )}

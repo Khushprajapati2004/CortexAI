@@ -2,27 +2,97 @@
 
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
-import React, { useState, ChangeEvent, FormEvent } from 'react'
+import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 const ResetPassword = () => {
     const [showNewPassword, setShowNewPassword] = useState<boolean>(false)
     const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string>('')
+    const [success, setSuccess] = useState<string>('')
+    const [resetToken, setResetToken] = useState<string>('')
+    const router = useRouter()
+
     const [formData, setFormData] = useState({
         newPassword: '',
         confirmPassword: ''
     })
+
+    useEffect(() => {
+        // Get reset token from localStorage
+        const token = localStorage.getItem('resetToken')
+        if (token) {
+            setResetToken(token)
+        } else {
+            setError('Invalid reset token. Please restart the password reset process.')
+        }
+    }, [])
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         setFormData({
             ...formData,
             [e.target.name]: e.target.value
         })
+        setError('')
+        setSuccess('')
     }
 
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        // Handle reset password logic here
-        console.log('Reset password:', formData)
+        
+        if (formData.newPassword !== formData.confirmPassword) {
+            setError('Passwords do not match')
+            return
+        }
+
+        if (formData.newPassword.length < 6) {
+            setError('Password must be at least 6 characters long')
+            return
+        }
+
+        if (!resetToken) {
+            setError('Invalid reset token. Please restart the password reset process.')
+            return
+        }
+
+        setIsLoading(true)
+        setError('')
+
+        try {
+            const response = await fetch('/api/auth/reset-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    resetToken,
+                    newPassword: formData.newPassword
+                }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Password reset failed')
+            }
+
+            setSuccess('Password reset successfully! Redirecting to login...')
+            
+            // Clear localStorage
+            localStorage.removeItem('resetToken')
+            localStorage.removeItem('resetEmail')
+            
+            // Redirect to login after 3 seconds
+            setTimeout(() => {
+                router.push('/login')
+            }, 3000)
+            
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Password reset failed')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -40,7 +110,6 @@ const ResetPassword = () => {
             <div className="w-full max-w-md">
                 {/* Logo Section */}
                 <div className="text-center mb-8">
-                   
                     <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
                         CortexAI
                     </h1>
@@ -51,6 +120,18 @@ const ResetPassword = () => {
 
                 {/* Reset Password Form */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                            {error}
+                        </div>
+                    )}
+
+                    {success && (
+                        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
+                            {success}
+                        </div>
+                    )}
+
                     <div className="text-center mb-6">
                         <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
                             Reset Password
@@ -77,11 +158,13 @@ const ResetPassword = () => {
                                     placeholder="Enter new password"
                                     required
                                     minLength={6}
+                                    disabled={isLoading}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowNewPassword(!showNewPassword)}
                                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                                    disabled={isLoading}
                                 >
                                     {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -107,11 +190,13 @@ const ResetPassword = () => {
                                     placeholder="Confirm new password"
                                     required
                                     minLength={6}
+                                    disabled={isLoading}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                                    disabled={isLoading}
                                 >
                                     {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -162,10 +247,10 @@ const ResetPassword = () => {
                         {/* Reset Password Button */}
                         <button
                             type="submit"
-                            disabled={!formData.newPassword || !formData.confirmPassword || formData.newPassword !== formData.confirmPassword}
+                            disabled={!formData.newPassword || !formData.confirmPassword || formData.newPassword !== formData.confirmPassword || isLoading}
                             className="w-full bg-gray-700 hover:bg-black disabled:bg-gray-400 disabled:cursor-not-allowed text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black dark:disabled:bg-gray-600 dark:disabled:text-gray-400 cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 transform hover:-translate-y-0.5 shadow-lg hover:shadow-xl"
                         >
-                            Reset Password
+                            {isLoading ? 'Resetting Password...' : 'Reset Password'}
                         </button>
                     </form>
 

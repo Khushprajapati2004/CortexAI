@@ -3,9 +3,14 @@
 import { ArrowLeft, Eye, EyeOff, Github } from 'lucide-react'
 import Link from 'next/link'
 import React, { useState, ChangeEvent, FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 
 const Signup = () => {
     const [showPassword, setShowPassword] = useState<boolean>(false)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string>('')
+    const router = useRouter()
+
     const [formData, setFormData] = useState({
         username: '',
         email: '',
@@ -17,12 +22,41 @@ const Signup = () => {
             ...formData,
             [e.target.name]: e.target.value
         })
+        setError('') // Clear error when user starts typing
     }
 
-    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        // Handle form submission here
-        console.log('Form submitted:', formData)
+        setIsLoading(true)
+        setError('')
+
+        try {
+            const response = await fetch('/api/auth/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Something went wrong')
+            }
+
+            // Redirect to verification page or show success message
+            router.push('/verify-email?email=' + encodeURIComponent(formData.email))
+            
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                setError(err.message)
+            } else {
+                setError('An unexpected error occurred')
+            }
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -50,6 +84,12 @@ const Signup = () => {
 
                 {/* Signup Form */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                            {error}
+                        </div>
+                    )}
+                    
                     <form className="space-y-5" onSubmit={handleSubmit}>
                         {/* Username Field */}
                         <div>
@@ -65,6 +105,7 @@ const Signup = () => {
                                 className="w-full text-sm px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white transition-all duration-200 outline-none focus:ring-1 focus:ring-white focus:border-transparent"
                                 placeholder="Enter your username"
                                 required
+                                disabled={isLoading}
                             />
                         </div>
 
@@ -82,6 +123,7 @@ const Signup = () => {
                                 className="w-full text-sm px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-1 focus:ring-white focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200"
                                 placeholder="Enter your email"
                                 required
+                                disabled={isLoading}
                             />
                         </div>
 
@@ -100,11 +142,14 @@ const Signup = () => {
                                     className="w-full text-sm px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-1 focus:ring-white focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 pr-12"
                                     placeholder="Create a password"
                                     required
+                                    disabled={isLoading}
+                                    minLength={6}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                                    disabled={isLoading}
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -114,9 +159,10 @@ const Signup = () => {
                         {/* Signup Button */}
                         <button
                             type="submit"
-                            className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold "
+                            disabled={isLoading}
+                            className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                         >
-                            Create Account
+                            {isLoading ? 'Creating Account...' : 'Create Account'}
                         </button>
                     </form>
 

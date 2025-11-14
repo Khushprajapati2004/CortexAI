@@ -1,14 +1,44 @@
+// app/verify-otp/page.tsx
 "use client"
 
 import { ArrowLeft, Clock } from 'lucide-react'
 import Link from 'next/link'
 import React, { useState, useRef, useEffect, ChangeEvent, KeyboardEvent } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 const VerifyOTP = () => {
     const [otp, setOtp] = useState<string[]>(['', '', '', '', '', ''])
-    const [timer, setTimer] = useState<number>(60)
+    const [timer, setTimer] = useState<number>(600) // 10 minutes in seconds
     const [isResendEnabled, setIsResendEnabled] = useState<boolean>(false)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string>('')
+    const [email, setEmail] = useState<string>('')
     const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+    const router = useRouter()
+    const searchParams = useSearchParams()
+
+    useEffect(() => {
+        // Try multiple ways to get the email
+        let storedEmail = localStorage.getItem('resetEmail')
+        
+        // If not in localStorage, check URL parameters
+        if (!storedEmail) {
+            storedEmail = searchParams.get('email')
+        }
+        
+        // If still not found, try sessionStorage as fallback
+        if (!storedEmail) {
+            storedEmail = sessionStorage.getItem('resetEmail')
+        }
+
+        if (storedEmail) {
+            setEmail(storedEmail)
+            // Ensure it's in localStorage for consistency
+            localStorage.setItem('resetEmail', storedEmail)
+        } else {
+            setError('Email not found. Please go back and restart the password reset process.')
+        }
+    }, [searchParams])
 
     useEffect(() => {
         if (timer > 0) {
@@ -25,6 +55,7 @@ const VerifyOTP = () => {
         const newOtp = [...otp]
         newOtp[index] = value
         setOtp(newOtp)
+        setError('')
 
         // Auto-focus next input
         if (value && index < 5) {
@@ -50,32 +81,139 @@ const VerifyOTP = () => {
                 }
             })
             setOtp(newOtp)
+            setError('')
             inputRefs.current[Math.min(5, pastedData.length - 1)]?.focus()
         }
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         const otpValue = otp.join('')
-        if (otpValue.length === 6) {
-            // Handle OTP verification here
-            console.log('OTP submitted:', otpValue)
+        
+        if (otpValue.length !== 6) {
+            setError('Please enter the complete 6-digit OTP')
+            return
+        }
+
+        if (!email) {
+            setError('Email not found. Please go back and restart the process.')
+            return
+        }
+
+        setIsLoading(true)
+        setError('')
+
+        try {
+            const response = await fetch('/api/auth/verify-otp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, otp: otpValue }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'OTP verification failed')
+            }
+
+            // Store reset token and redirect to reset password page
+            localStorage.setItem('resetToken', data.resetToken)
+            // Clear the email from storage after successful verification
+            localStorage.removeItem('resetEmail')
+            router.push('/reset-password')
+            
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'OTP verification failed')
+        } finally {
+            setIsLoading(false)
         }
     }
 
-    const handleResend = () => {
-        setTimer(60)
-        setIsResendEnabled(false)
-        setOtp(['', '', '', '', '', ''])
-        inputRefs.current[0]?.focus()
-        // Handle resend OTP logic here
-        console.log('Resend OTP requested')
+    const handleResend = async () => {
+        if (!email) {
+            setError('Email not found. Please go back and restart the process.')
+            return
+        }
+
+        setIsLoading(true)
+        setError('')
+
+        try {
+            const response = await fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to resend OTP')
+            }
+
+            setTimer(600)
+            setIsResendEnabled(false)
+            setOtp(['', '', '', '', '', ''])
+            inputRefs.current[0]?.focus()
+            
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to resend OTP')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60)
         const secs = seconds % 60
         return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+
+    // If no email is found, show error message
+    if (!email && error) {
+        return (
+            <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+                <Link 
+                    href="/forgot-password"
+                    className="absolute top-6 left-6 flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                    <span className="text-sm font-medium">Back</span>
+                </Link>
+
+                <div className="w-full max-w-md">
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
+                            CortexAI
+                        </h1>
+                    </div>
+
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center">
+                        <div className="text-red-600 dark:text-red-400 mb-4">
+                            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
+                            Session Expired
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                            {error}
+                        </p>
+                        <Link
+                            href="/forgot-password"
+                            className="w-full bg-gray-700 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200 inline-block text-center"
+                        >
+                            Restart Password Reset
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -103,6 +241,12 @@ const VerifyOTP = () => {
 
                 {/* OTP Verification Form */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                            {error}
+                        </div>
+                    )}
+
                     <div className="text-center mb-6">
                         <div className="flex justify-center mb-4">
                             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
@@ -117,6 +261,11 @@ const VerifyOTP = () => {
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                             We{"'"}ve sent a 6-digit code to your email address
                         </p>
+                        {email && (
+                            <p className="text-sm font-medium text-gray-800 dark:text-white mt-1">
+                                {email}
+                            </p>
+                        )}
                     </div>
 
                     <form className="space-y-6" onSubmit={handleSubmit}>
@@ -125,7 +274,9 @@ const VerifyOTP = () => {
                             {otp.map((digit, index) => (
                                 <input
                                     key={index}
-                                    ref={(el) => inputRefs.current[index] = el}
+                                    ref={(el) => {
+                                        inputRefs.current[index] = el
+                                    }}
                                     type="text"
                                     inputMode="numeric"
                                     maxLength={1}
@@ -135,6 +286,7 @@ const VerifyOTP = () => {
                                     onPaste={handlePaste}
                                     className="w-12 h-12 text-center text-lg font-semibold border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white transition-all duration-200 outline-none"
                                     required
+                                    disabled={isLoading}
                                 />
                             ))}
                         </div>
@@ -150,10 +302,10 @@ const VerifyOTP = () => {
                         {/* Verify Button */}
                         <button
                             type="submit"
-                            disabled={otp.join('').length !== 6}
+                            disabled={otp.join('').length !== 6 || isLoading}
                             className="w-full bg-gray-700 hover:bg-black disabled:bg-gray-400 disabled:cursor-not-allowed text-white dark:bg-white dark:hover:bg-gray-100 dark:hover:text-gray-800 dark:text-black dark:disabled:bg-gray-600 dark:disabled:text-gray-400 cursor-pointer py-2.5 px-4 rounded-lg font-semibold transition-all duration-200"
                         >
-                            Verify Code
+                            {isLoading ? 'Verifying...' : 'Verify Code'}
                         </button>
                     </form>
 
@@ -163,9 +315,9 @@ const VerifyOTP = () => {
                             Didn{"'"}t receive the code?{' '}
                             <button
                                 onClick={handleResend}
-                                disabled={!isResendEnabled}
+                                disabled={!isResendEnabled || isLoading}
                                 className={`font-medium transition-colors duration-200 ${
-                                    isResendEnabled 
+                                    isResendEnabled && !isLoading
                                         ? 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer' 
                                         : 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                 }`}
