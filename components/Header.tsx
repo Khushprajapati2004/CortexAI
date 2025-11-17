@@ -10,11 +10,14 @@ import {
 } from '@/components/ui/tooltip';
 import Sidebar from './Sidebar';
 import { useSidebar } from '../context/SidebarContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const Header = () => {
     const { isSidebarOpen, toggleSidebar } = useSidebar();
     const [isDarkMode, setIsDarkMode] = useState(false);
+    const [isDocumentModeOpen, setIsDocumentModeOpen] = useState(false);
+    const [selectedDocumentMode, setSelectedDocumentMode] = useState('Document Mode');
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Apply dark mode class to document when mode changes
     useEffect(() => {
@@ -25,9 +28,43 @@ const Header = () => {
         }
     }, [isDarkMode]);
 
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDocumentModeOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
     const toggleDarkMode = () => {
         setIsDarkMode(!isDarkMode);
     };
+
+    const toggleDocumentMode = () => {
+        setIsDocumentModeOpen(!isDocumentModeOpen);
+    };
+
+    const handleDocumentModeSelect = (modeName: string) => {
+        if (modeName === 'Clear') {
+            setSelectedDocumentMode('Document Mode');
+        } else {
+            setSelectedDocumentMode(modeName);
+        }
+        setIsDocumentModeOpen(false);
+    };
+
+    const documentModes = [
+        { name: 'Manuals', active: selectedDocumentMode === 'Manuals' },
+        { name: 'FAA SDRS', active: selectedDocumentMode === 'FAA SDRS' },
+        { name: 'FAA SB/AD', active: selectedDocumentMode === 'FAA SB/AD' },
+        { name: 'Clear', active: false }
+    ];
 
     return (
         <>
@@ -82,10 +119,44 @@ const Header = () => {
                                 </TooltipContent>
                             </Tooltip>
 
-                            <button className="flex items-center space-x-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 font-semibold text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white rounded-md cursor-pointer">
-                                <Menu className="w-4 h-4" />
-                                <span className="text-sm">Document Mode</span>
-                            </button>
+                            {/* Document Mode Dropdown */}
+                            <div className="relative" ref={dropdownRef}>
+                                <button 
+                                    className="flex items-center space-x-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 font-semibold text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white rounded-md cursor-pointer"
+                                    onClick={toggleDocumentMode}
+                                >
+                                    <Menu className="w-4 h-4" />
+                                    <span className="text-sm">{selectedDocumentMode}</span>
+                                </button>
+
+                                {/* Dropdown Menu */}
+                                {isDocumentModeOpen && (
+                                    <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50">
+                                        {documentModes.map((mode, index) => (
+                                            <button
+                                                key={mode.name}
+                                                onClick={() => handleDocumentModeSelect(mode.name)}
+                                                className={`w-full flex items-center justify-between px-4 py-2 text-sm text-left transition-colors ${
+                                                    mode.active 
+                                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' 
+                                                        : mode.name === 'Clear'
+                                                            ? 'text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 justify-center'
+                                                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                } ${
+                                                    index === 0 ? 'rounded-t-lg' : ''
+                                                } ${
+                                                    index === documentModes.length - 1 ? 'rounded-b-lg' : ''
+                                                }`}
+                                            >
+                                                <span>{mode.name}</span>
+                                                {mode.active && (
+                                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             <button className="px-3 py-2 flex items-center gap-2 text-base font-semibold text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
                                 <Star className='h-4 w-4 fill-black dark:fill-white' /> Favorites <ChevronDown className='w-4 h-5' />

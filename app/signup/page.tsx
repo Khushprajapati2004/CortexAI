@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, Eye, EyeOff, Github } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import React, { useState, ChangeEvent, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
