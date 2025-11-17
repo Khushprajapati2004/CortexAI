@@ -4,13 +4,19 @@
 import { CirclePlus, Ellipsis, PanelRightOpen, PencilLine, Pin, Search, SquarePen, Trash, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback } from 'react';
+import UserProfile from './UserProfile';
 
 interface SidebarProps {
     isOpen: boolean;
     onClose: () => void;
+    user?: {
+        id: string;
+        username: string;
+        email: string;
+    } | null;
 }
 
-const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
+const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -79,7 +85,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             />
 
             {/* Sidebar */}
-            <div className={`fixed left-0 top-0 h-full w-74 bg-white dark:bg-gray-900 shadow-xl border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out z-50 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+            <div className={`fixed left-0 top-0 h-full w-76 bg-white dark:bg-gray-900 shadow-xl border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out z-50 ${isOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}>
                 {/* Sidebar Header */}
                 <div className="flex items-center justify-between p-2">
@@ -220,17 +226,28 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                     </div>
                 </div>
 
-                <div className='flex items-center justify-center gap-3 absolute left-2 bottom-4'>
-                    <Link href="/login">
-                        <button className='bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-10 py-2 rounded-full cursor-pointer'>
-                            Log in
-                        </button>
-                    </Link>
-                    <Link href="/signup">
-                        <button className='bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-10 py-2 rounded-full cursor-pointer'>
-                            Sign up
-                        </button>
-                    </Link>
+                {/* Updated Footer Section */}
+                <div className='absolute bottom-4 left-0 right-0 px-4'>
+                    {user ? (
+                        // Show user profile when logged in
+                        <div className="flex justify-center">
+                            <UserProfile user={user} />
+                        </div>
+                    ) : (
+                        // Show login/signup buttons when not logged in
+                        <div className='flex items-center justify-center gap-3'>
+                            <Link href="/login">
+                                <button className='bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-8 py-2 rounded-full cursor-pointer'>
+                                    Log in
+                                </button>
+                            </Link>
+                            <Link href="/signup">
+                                <button className='bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-8 py-2 rounded-full cursor-pointer'>
+                                    Sign up
+                                </button>
+                            </Link>
+                        </div>
+                    )}
                 </div>
             </div>
         </>

@@ -3,14 +3,42 @@
 
 import Header from '@/components/Header'
 import Hero from '@/components/Hero'
-import React from 'react'
+import Sidebar from '@/components/Sidebar'
+import React,{useState,useEffect} from 'react'
 import { useSidebar } from '../context/SidebarContext';
 
+interface User {
+    id: string;
+    username: string;
+    email: string;
+}
+
 const Home = () => {
-    const { isSidebarOpen } = useSidebar();
+    const { isSidebarOpen,closeSidebar } = useSidebar();
+    const [user, setUser] = useState<User | null>(null);
+
+    useEffect(() => {
+        // Fetch user data on component mount
+        const fetchUser = async () => {
+            try {
+                const response = await fetch('/api/auth/me');
+                if (response.ok) {
+                    const userData = await response.json();
+                    setUser(userData.user);
+                }
+            } catch (error) {
+                console.error('Failed to fetch user:', error);
+            }
+        };
+
+        fetchUser();
+    }, []);
 
     return (
         <div className="min-h-screen bg-white dark:bg-gray-900 relative">
+            {/* Sidebar with user prop */}
+            <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} user={user} />
+            
             {/* Main content - stays in place when sidebar opens */}
             <div className={`transition-all duration-300 ${
                 isSidebarOpen ? 'lg:ml-80' : 'ml-0'

@@ -8,7 +8,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import Sidebar from './Sidebar';
+// import Sidebar from './Sidebar';
 import { useSidebar } from '../context/SidebarContext';
 import { useState, useEffect, useRef } from 'react';
 
@@ -167,7 +167,7 @@ const Header = () => {
             </TooltipProvider>
 
             {/* Sidebar */}
-            <Sidebar isOpen={isSidebarOpen} onClose={toggleSidebar} />
+            {/* <Sidebar isOpen={isSidebarOpen} onClose={toggleSidebar} /> */}
         </>
     );
 };
