@@ -19,13 +19,28 @@ const Header = () => {
     const [selectedDocumentMode, setSelectedDocumentMode] = useState('Document Mode');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Apply dark mode class to document when mode changes
+    // Initialize dark mode from localStorage on component mount
+    useEffect(() => {
+        const savedDarkMode = localStorage.getItem('darkMode');
+        if (savedDarkMode) {
+            const isDark = JSON.parse(savedDarkMode);
+            setIsDarkMode(isDark);
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+    }, []);
+
+    // Apply dark mode class to document when mode changes and save to localStorage
     useEffect(() => {
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
         }
+        localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
     }, [isDarkMode]);
 
     // Close dropdown when clicking outside

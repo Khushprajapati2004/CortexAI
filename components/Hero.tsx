@@ -236,7 +236,9 @@ const Hero = () => {
                                     
                                     {/* Dropdown Menu */}
                                     {isDropdownOpen && (
-                                        <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg dark:shadow-gray-900 z-10 overflow-hidden transition-all duration-200 transform origin-top">
+                                        <div className={`absolute ${
+                                            messages.length > 0 ? 'bottom-full mb-2' : 'top-full mt-2'
+                                        } left-0 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg dark:shadow-gray-900 z-10 overflow-hidden transition-all duration-200 transform origin-top`}>
                                             {modes.map((mode, index) => (
                                                 <div
                                                     key={mode.name}
