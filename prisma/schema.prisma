@@ -25,15 +25,16 @@ model User {
   providerId        String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  
+
   // NextAuth required fields
-  name              String?
-  emailVerified     DateTime?
-  image             String?
-  
+  name          String?
+  emailVerified DateTime?
+  image         String?
+
   // NextAuth relations
-  accounts          Account[]
-  sessions          Session[]
+  accounts Account[]
+  sessions Session[]
+  chats    Chat[]
 
   @@map("users")
 }
@@ -75,4 +76,31 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+// Add to your schema.prisma
+model Chat {
+  id        String   @id @default(cuid())
+  title     String
+  userId    String
+  mode      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("chats")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  role      String // 'user' or 'assistant'
+  chatId    String
+  createdAt DateTime @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
 }

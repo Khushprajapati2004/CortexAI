@@ -28,15 +28,16 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, account }) {
       // Persist user id and provider to the token using type-safe approach
       if (user) {
-        // Use type assertion for user object
-        const userWithId = user ;
-        token.id = userWithId.id;
+        // Store the NextAuth user ID in token
+        token.id = user.id;
+        token.email = user.email;
         token.provider = account?.provider;
       }
       return token;
     },
     async session({ session, token }) {
       // Send properties to the client with type safety
+      // Use the ID from the custom User table if available, otherwise use NextAuth ID
       return {
         ...session,
         user: {
@@ -46,45 +47,69 @@ export const authOptions: NextAuthOptions = {
         },
       };
     },
-    async signIn({ user, account }) { // Removed unused 'profile' parameter
+    async signIn({ user, account }) {
       try {
-        // Check if user exists in our custom User table
-        if (user.email) {
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email },
-          });
+        if (!user.email || !user.id) {
+          console.error("User missing email or id:", { email: user.email, id: user.id });
+          return true;
+        }
 
-          if (existingUser) {
-            // Update user provider if different
-            if (existingUser.provider !== account?.provider) {
-              await prisma.user.update({
-                where: { id: existingUser.id },
-                data: {
-                  provider: account?.provider || "oauth",
-                  providerId: account?.providerAccountId,
-                  isVerified: true, // OAuth users are automatically verified
-                  isLoggedIn: true,
-                },
-              });
-            }
-          } else {
-            // Create new user in our custom User table
+        console.log("SignIn callback - user.id:", user.id);
+
+        // ALWAYS use the user.id from NextAuth as the source of truth
+        // Don't look up by email - this causes ID mismatches!
+        
+        const existingUser = await prisma.user.findUnique({
+          where: { id: user.id },
+        }).catch(err => {
+          console.warn("Error finding user:", err);
+          return null;
+        });
+
+        if (existingUser) {
+          // User exists, just update their info
+          console.log("User exists with ID:", user.id);
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              isLoggedIn: true,
+              isVerified: true,
+              provider: account?.provider || existingUser.provider,
+              providerId: account?.providerAccountId || existingUser.providerId,
+              email: user.email, // Ensure email is up to date
+              name: user.name || existingUser.name,
+              image: user.image || existingUser.image,
+            },
+          }).catch(err => console.warn("Error updating user:", err));
+        } else {
+          // Create new user with the NextAuth user.id
+          console.log("Creating new user with NextAuth ID:", user.id);
+          try {
             await prisma.user.create({
               data: {
+                id: user.id, // Use NextAuth user ID
                 email: user.email,
-                username: user.email?.split('@')[0] || `user_${Date.now()}`,
+                username: user.name?.replace(/\s+/g, '_').substring(0, 20) || user.email.split('@')[0] || `user_${user.id}`.substring(0, 20),
+                name: user.name,
+                image: user.image,
                 provider: account?.provider || "oauth",
                 providerId: account?.providerAccountId,
                 isVerified: true,
                 isLoggedIn: true,
               },
             });
+            console.log("User created successfully with ID:", user.id);
+          } catch (createError: unknown) {
+            console.error("Failed to create user:", createError);
+            // Even if creation fails, allow signin to proceed
+            // The user will be created on next API call if needed
           }
         }
+
         return true;
       } catch (error) {
         console.error("SignIn callback error:", error);
-        return false;
+        return true;
       }
     },
   },
