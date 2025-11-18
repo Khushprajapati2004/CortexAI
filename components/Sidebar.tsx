@@ -1,10 +1,11 @@
 // components/Sidebar.tsx
 'use client';
 
-import { CirclePlus, Ellipsis, PanelRightOpen, PencilLine, Pin, Search, SquarePen, Trash, X } from 'lucide-react';
+import { CirclePlus, Ellipsis, Heart, PanelRightOpen, PencilLine, Search, SquarePen, Trash, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import UserProfile from './UserProfile';
+import { ChatStorage, StoredChat } from '@/lib/chatStorage';
 
 interface Chat {
   id: string;
@@ -12,8 +13,11 @@ interface Chat {
   mode: string | null;
   messages: Array<{
     content: string;
+    role?: string;
   }>;
   createdAt: string;
+  updatedAt?: string;
+  isFavorite?: boolean;
 }
 
 interface SidebarProps {
@@ -32,32 +36,85 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [chats, setChats] = useState<Chat[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const menuRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const searchInputRef = useRef<HTMLInputElement>(null);
 
-    // Fetch chats when sidebar opens or user changes
-    useEffect(() => {
-        const fetchChats = async () => {
-            if (!user) return;
-            
+    const mapStoredChats = (storedChats: StoredChat[]): Chat[] =>
+        storedChats.map((chat) => ({
+            id: chat.id,
+            title: chat.title,
+            mode: chat.mode,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            isFavorite: chat.isFavorite,
+            messages: (chat.messages || []).slice(-1).map((message) => ({
+                content: message.content,
+                role: message.role,
+            })),
+        }));
+
+    const fetchChats = useCallback(async (showLoader = false) => {
+        if (showLoader) {
             setIsLoading(true);
-            try {
+        }
+
+        try {
+            if (user) {
                 const response = await fetch('/api/chats');
                 if (response.ok) {
                     const data = await response.json();
-                    setChats(data.chats || []);
+                    if ((data.chats || []).length === 0) {
+                        setChats(mapStoredChats(ChatStorage.getChats()));
+                    } else {
+                        setChats(data.chats || []);
+                    }
+                } else {
+                    setChats(mapStoredChats(ChatStorage.getChats()));
                 }
-            } catch (error) {
-                console.error('Failed to fetch chats:', error);
-            } finally {
+            } else {
+                setChats(mapStoredChats(ChatStorage.getChats()));
+            }
+        } catch (error) {
+            console.error('Failed to fetch chats:', error);
+            setChats(mapStoredChats(ChatStorage.getChats()));
+        } finally {
+            if (showLoader) {
                 setIsLoading(false);
             }
+        }
+    }, [user]);
+
+    useEffect(() => {
+        fetchChats(isOpen);
+    }, [fetchChats, isOpen]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const currentId = localStorage.getItem('currentChatId');
+        if (currentId) {
+            setActiveChatId(currentId);
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleActiveChat = (event: Event) => {
+            const detail = (event as CustomEvent<{ chatId: string | null }>).detail;
+            setActiveChatId(detail?.chatId ?? null);
         };
 
-        if (isOpen && user) {
+        const handleChatsRefresh = () => {
             fetchChats();
-        }
-    }, [isOpen, user]);
+        };
+
+        window.addEventListener('chat:active', handleActiveChat as EventListener);
+        window.addEventListener('chat:list-refresh', handleChatsRefresh);
+
+        return () => {
+            window.removeEventListener('chat:active', handleActiveChat as EventListener);
+            window.removeEventListener('chat:list-refresh', handleChatsRefresh);
+        };
+    }, [fetchChats]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -105,53 +162,73 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     }, []);
 
+    const closeIfMobile = () => {
+        if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+            onClose();
+        }
+    };
+
     const handleNewChat = () => {
-        // Reset the main chat interface
-        window.location.href = '/'; // Or use your state management to reset the chat
+        window.dispatchEvent(new CustomEvent('chat:select', { detail: { chatId: null } }));
+        setActiveChatId(null);
+        closeIfMobile();
+    };
+
+    const handleChatClick = (chatId: string) => {
+        setActiveChatId(chatId);
+        setOpenMenuId(null);
+        window.dispatchEvent(new CustomEvent('chat:select', { detail: { chatId } }));
+        closeIfMobile();
     };
 
     const handleDeleteChat = async (chatId: string) => {
         try {
-            const response = await fetch(`/api/chats/${chatId}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                // Remove chat from local state
-                setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
-                setOpenMenuId(null);
+            if (user) {
+                await fetch(`/api/chats/${chatId}`, {
+                    method: 'DELETE',
+                });
             }
         } catch (error) {
             console.error('Failed to delete chat:', error);
+        } finally {
+            ChatStorage.deleteChat(chatId);
+            setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
+            if (activeChatId === chatId) {
+                setActiveChatId(null);
+            }
+            setOpenMenuId(null);
+            window.dispatchEvent(new CustomEvent('chat:deleted', { detail: { chatId } }));
+            window.dispatchEvent(new CustomEvent('chat:list-refresh'));
         }
     };
 
     const handleRenameChat = async (chatId: string, newTitle: string) => {
         try {
-            const response = await fetch(`/api/chats/${chatId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ title: newTitle }),
-            });
-
-            if (response.ok) {
-                // Update chat in local state
-                setChats(prevChats => 
-                    prevChats.map(chat => 
-                        chat.id === chatId ? { ...chat, title: newTitle } : chat
-                    )
-                );
-                setOpenMenuId(null);
+            if (user) {
+                await fetch(`/api/chats/${chatId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ title: newTitle }),
+                });
             }
+            setChats(prevChats => 
+                prevChats.map(chat => 
+                    chat.id === chatId ? { ...chat, title: newTitle } : chat
+                )
+            );
+            ChatStorage.updateChat(chatId, { title: newTitle });
+            setOpenMenuId(null);
+            window.dispatchEvent(new CustomEvent('chat:renamed', { detail: { chatId, title: newTitle } }));
+            window.dispatchEvent(new CustomEvent('chat:list-refresh'));
         } catch (error) {
             console.error('Failed to rename chat:', error);
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
+    const formatDate = (dateString: string, fallback?: string) => {
+        const date = new Date(dateString || fallback || new Date().toISOString());
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
@@ -169,17 +246,45 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     };
 
+    const toggleFavorite = async (chatId: string, nextValue: boolean) => {
+        setChats(prev =>
+            prev.map(chat =>
+                chat.id === chatId ? { ...chat, isFavorite: nextValue } : chat
+            )
+        );
+        ChatStorage.updateChat(chatId, { isFavorite: nextValue });
+
+        try {
+            if (user) {
+                await fetch(`/api/chats/${chatId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isFavorite: nextValue }),
+                });
+            }
+        } catch (error) {
+            console.error('Failed to update favorite:', error);
+        }
+    };
+
     const groupChatsByDate = () => {
+        const favorites = chats.filter(chat => chat.isFavorite);
+        const nonFavorites = chats.filter(chat => !chat.isFavorite);
+
         const grouped: { [key: string]: Chat[] } = {};
-        
-        chats.forEach(chat => {
-            const dateKey = formatDate(chat.createdAt);
+
+        if (favorites.length > 0) {
+            grouped['Favorites'] = favorites;
+        }
+
+        nonFavorites.forEach(chat => {
+            const dateKey = formatDate(chat.updatedAt || chat.createdAt, chat.createdAt);
             if (!grouped[dateKey]) {
                 grouped[dateKey] = [];
             }
             grouped[dateKey].push(chat);
         });
-        
+
         return grouped;
     };
 
@@ -201,7 +306,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
             />
 
             {/* Sidebar */}
-            <div className={`fixed left-0 top-0 h-full w-76 bg-white dark:bg-gray-900 shadow-xl border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out z-50 ${
+            <div className={`fixed left-0 top-0 bottom-0 h-screen w-76 bg-white dark:bg-gray-900 shadow-xl border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out z-50 ${
                 isOpen ? 'translate-x-0' : '-translate-x-full'
             }`}>
                 {/* Sidebar Header */}
@@ -259,7 +364,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                 </div>
 
                 {/* Chats List */}
-                <div className="flex-1 overflow-y-auto pb-20">
+            <div className="flex-1 overflow-y-auto h-full pb-20 custom-scrollbar">
                     {isLoading ? (
                         <div className="flex justify-center items-center py-8">
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-500"></div>
@@ -297,7 +402,12 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                                             .map((chat) => (
                                                 <div
                                                     key={chat.id}
-                                                    className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg cursor-pointer group relative"
+                                                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer group relative ${
+                                                        activeChatId === chat.id
+                                                            ? 'bg-gray-100 dark:bg-gray-800'
+                                                            : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                                                    }`}
+                                                    onClick={() => handleChatClick(chat.id)}
                                                 >
                                                     <div className="flex items-center space-x-3 min-w-0 flex-1">
                                                         <div className="flex flex-col min-w-0 flex-1">
@@ -342,8 +452,14 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                                                         >
                                                             <PencilLine className='w-4 h-4' /> Rename
                                                         </button>
-                                                        <button className="w-full px-4 cursor-pointer flex items-center gap-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors">
-                                                            <Pin className='h-4 w-4 rotate-45' /> Pin
+                                                        <button
+                                                            className="w-full px-4 cursor-pointer flex items-center gap-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors"
+                                                            onClick={() => toggleFavorite(chat.id, !chat.isFavorite)}
+                                                        >
+                                                            <Heart
+                                                                className={`h-4 w-4 ${chat.isFavorite ? 'fill-red-500 text-red-500' : ''}`}
+                                                            />
+                                                            {chat.isFavorite ? 'Unfavorite' : 'Favorite'}
                                                         </button>
                                                         <button 
                                                             className="w-full cursor-pointer flex items-center gap-2 px-4 py-2 text-red-700 dark:text-red-500 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors"

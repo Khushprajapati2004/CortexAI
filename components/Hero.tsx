@@ -1,6 +1,10 @@
 // components/Hero.tsx
 import { ArrowUp, BadgeDollarSignIcon, Box, ChevronDown, CircleCheckBig, Dribbble, Info, Mic, Plus, ScrollText, ShoppingBag, ShoppingCart, ToolCase } from 'lucide-react'
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import type { Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { ChatStorage, StoredChat } from '@/lib/chatStorage'
 
 interface Message {
   id: string;
@@ -9,15 +13,27 @@ interface Message {
   createdAt: Date;
 }
 
+interface ApiMessage {
+  id: string;
+  content: string;
+  role: Message['role'];
+  createdAt: string;
+}
+
+type ChatMeta = Pick<StoredChat, 'id' | 'title' | 'mode' | 'createdAt' | 'updatedAt'>
+
 const Hero = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const [selectedMode, setSelectedMode] = useState('Select Modes')
     const [inputValue, setInputValue] = useState('')
     const [isLoading, setIsLoading] = useState(false)
+    const [isHydrating, setIsHydrating] = useState(false)
     const [messages, setMessages] = useState<Message[]>([])
     const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+    const [currentChatMeta, setCurrentChatMeta] = useState<ChatMeta | null>(null)
     const dropdownRef = useRef<HTMLDivElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLTextAreaElement>(null)
 
     const modes = [
         { name: 'Marketplace', icon: <ShoppingCart className='h-4 w-4' /> },
@@ -34,9 +50,58 @@ const Hero = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
 
+    const autoResizeInput = useCallback(() => {
+        if (!inputRef.current) return
+        const textarea = inputRef.current
+        textarea.style.height = 'auto'
+        const nextHeight = Math.min(textarea.scrollHeight, 280)
+        textarea.style.height = `${nextHeight}px`
+    }, [])
+
+    const formatTimestamp = (date: Date) => {
+        if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+            return ''
+        }
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    const markdownComponents: Components = {
+        code(codeProps) {
+            const { inline, className, children, ...rest } = codeProps as {
+                inline?: boolean
+                className?: string
+                children: React.ReactNode
+            }
+            if (inline) {
+                return <code className={`px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-[13px] ${className ?? ''}`} {...rest}>{children}</code>
+            }
+            return (
+                <pre className='w-full overflow-x-auto rounded-xl bg-gray-900 text-gray-100 text-sm p-4 my-3 border border-gray-800'>
+                    <code className={className} {...rest}>{children}</code>
+                </pre>
+            )
+        },
+        ul(props) {
+            return <ul {...props} className={`list-disc ml-5 space-y-1 text-sm text-gray-700 dark:text-gray-200 ${props.className ?? ''}`} />
+        },
+        ol(props) {
+            return <ol {...props} className={`list-decimal ml-5 space-y-1 text-sm text-gray-700 dark:text-gray-200 ${props.className ?? ''}`} />
+        },
+        p(props) {
+            return <p {...props} className={`text-sm leading-6 text-gray-700 dark:text-gray-200 ${props.className ?? ''}`} />
+        },
+        a(props) {
+            return <a {...props} target='_blank' rel='noreferrer' className={`text-blue-500 hover:underline ${props.className ?? ''}`} />
+        },
+    }
+
     useEffect(() => {
         scrollToBottom()
     }, [messages])
+
+    useEffect(() => {
+        autoResizeInput()
+    }, [autoResizeInput, inputValue])
 
     const toggleDropdown = () => {
         setIsDropdownOpen(!isDropdownOpen)
@@ -57,8 +122,186 @@ const Hero = () => {
         }
     }
 
+    const broadcastActiveChat = useCallback((chatId: string | null) => {
+        window.dispatchEvent(new CustomEvent('chat:active', { detail: { chatId } }))
+    }, [])
+
+    const notifyChatListRefresh = useCallback(() => {
+        window.dispatchEvent(new CustomEvent('chat:list-refresh'))
+    }, [])
+
+    const setActiveChat = useCallback((chatId: string | null, mode?: string | null) => {
+        if (chatId) {
+            setCurrentChatId(chatId)
+            localStorage.setItem('currentChatId', chatId)
+            setSelectedMode(mode ?? 'Select Modes')
+        } else {
+            setCurrentChatId(null)
+            localStorage.removeItem('currentChatId')
+            setSelectedMode('Select Modes')
+            setCurrentChatMeta(null)
+        }
+        broadcastActiveChat(chatId)
+    }, [broadcastActiveChat])
+
+    const resetConversation = useCallback(() => {
+        setMessages([])
+        setInputValue('')
+        setActiveChat(null)
+        setCurrentChatMeta(null)
+    }, [setActiveChat])
+
+    const hydrateFromLocal = useCallback((chatId: string) => {
+        const storedChat = ChatStorage.getChat(chatId)
+        if (!storedChat) {
+            resetConversation()
+            return false
+        }
+        const hydratedMessages: Message[] = (storedChat.messages || []).map((msg) => ({
+            id: msg.id,
+            content: msg.content,
+            role: msg.role,
+            createdAt: new Date(msg.createdAt),
+        }))
+        setMessages(hydratedMessages)
+        setActiveChat(storedChat.id, storedChat.mode)
+        setCurrentChatMeta({
+            id: storedChat.id,
+            title: storedChat.title,
+            mode: storedChat.mode,
+            createdAt: storedChat.createdAt,
+            updatedAt: storedChat.updatedAt,
+        })
+        setSelectedMode(storedChat.mode ?? 'Select Modes')
+        return true
+    }, [resetConversation, setActiveChat])
+
+    const hydrateChat = useCallback(async (chatId: string) => {
+        setMessages([])
+        setIsHydrating(true)
+        let hydrated = false
+        try {
+            const response = await fetch(`/api/chats/${chatId}`)
+
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    hydrateFromLocal(chatId)
+                    return
+                }
+                if (response.status === 404) {
+                    resetConversation()
+                    return
+                }
+                throw new Error('Failed to fetch chat history')
+            }
+            const data = await response.json()
+            const chat = data.chat
+            if (chat) {
+                const hydratedMessages: Message[] = (chat.messages || []).map((msg: ApiMessage) => ({
+                    id: msg.id,
+                    content: msg.content,
+                    role: msg.role,
+                    createdAt: new Date(msg.createdAt),
+                }))
+                setMessages(hydratedMessages)
+                setActiveChat(chat.id, chat.mode)
+                setCurrentChatMeta({
+                    id: chat.id,
+                    title: chat.title,
+                    mode: chat.mode,
+                    createdAt: chat.createdAt,
+                    updatedAt: chat.updatedAt,
+                })
+                hydrated = true
+            }
+        } catch (error) {
+            console.error(error)
+        } finally {
+            if (!hydrated) {
+                hydrateFromLocal(chatId)
+            }
+            setIsHydrating(false)
+        }
+    }, [hydrateFromLocal, resetConversation, setActiveChat])
+
+    useEffect(() => {
+        const storedChatId = localStorage.getItem('currentChatId')
+        if (storedChatId) {
+            hydrateChat(storedChatId)
+        }
+    }, [hydrateChat])
+
+    useEffect(() => {
+        const handleChatSelect = (event: Event) => {
+            const detail = (event as CustomEvent<{ chatId: string | null }>).detail
+            if (!detail) return
+
+            if (detail.chatId) {
+                if (detail.chatId !== currentChatId) {
+                    hydrateChat(detail.chatId)
+                }
+            } else {
+                resetConversation()
+            }
+        }
+
+        const handleChatDeleted = (event: Event) => {
+            const detail = (event as CustomEvent<{ chatId: string }>).detail
+            if (detail?.chatId) {
+                ChatStorage.deleteChat(detail.chatId)
+                if (detail.chatId === currentChatId) {
+                    resetConversation()
+                }
+            }
+        }
+
+        const handleChatRenamed = (event: Event) => {
+            const detail = (event as CustomEvent<{ chatId: string; title: string }>).detail
+            if (detail?.chatId === currentChatId && currentChatMeta) {
+                setCurrentChatMeta(prev => prev ? { ...prev, title: detail.title } : prev)
+            }
+        }
+
+        window.addEventListener('chat:select', handleChatSelect as EventListener)
+        window.addEventListener('chat:deleted', handleChatDeleted as EventListener)
+        window.addEventListener('chat:renamed', handleChatRenamed as EventListener)
+
+        return () => {
+            window.removeEventListener('chat:select', handleChatSelect as EventListener)
+            window.removeEventListener('chat:deleted', handleChatDeleted as EventListener)
+            window.removeEventListener('chat:renamed', handleChatRenamed as EventListener)
+        }
+    }, [currentChatId, currentChatMeta, hydrateChat, resetConversation])
+
+    useEffect(() => {
+        if (!currentChatMeta) return
+        const normalizedMode = selectedMode !== 'Select Modes' ? selectedMode : null
+        if (currentChatMeta.mode === normalizedMode) return
+        setCurrentChatMeta(prev => prev ? { ...prev, mode: normalizedMode } : prev)
+    }, [currentChatMeta, selectedMode])
+
+    useEffect(() => {
+        if (!currentChatId || !currentChatMeta) return
+        const normalizedMode = selectedMode !== 'Select Modes' ? selectedMode : null
+        const serializedMessages = messages.map((message) => ({
+            id: message.id,
+            content: message.content,
+            role: message.role,
+            createdAt: message.createdAt.toISOString(),
+        }))
+        ChatStorage.saveChat({
+            id: currentChatMeta.id,
+            title: currentChatMeta.title,
+            mode: normalizedMode,
+            createdAt: currentChatMeta.createdAt,
+            updatedAt: new Date().toISOString(),
+            messages: serializedMessages,
+        })
+        notifyChatListRefresh()
+    }, [currentChatId, currentChatMeta, messages, notifyChatListRefresh, selectedMode])
+
     const handleSubmit = async () => {
-        if (!inputValue.trim() || isLoading) return
+        if (!inputValue.trim() || isLoading || isHydrating) return
 
         const userMessage = inputValue.trim()
         setInputValue('')
@@ -77,6 +320,7 @@ const Hero = () => {
         try {
             // Create chat if it doesn't exist
             let chatId = currentChatId
+            const normalizedMode = selectedMode !== 'Select Modes' ? selectedMode : null
             if (!chatId) {
                 const chatResponse = await fetch('/api/chats', {
                     method: 'POST',
@@ -85,7 +329,7 @@ const Hero = () => {
                     },
                     body: JSON.stringify({
                         title: userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : ''),
-                        mode: selectedMode !== 'Select Modes' ? selectedMode : null,
+                        mode: normalizedMode,
                     }),
                 })
 
@@ -97,7 +341,15 @@ const Hero = () => {
 
                 const chatData = await chatResponse.json()
                 chatId = chatData.chat.id
-                setCurrentChatId(chatId)
+                setActiveChat(chatId, normalizedMode)
+                setCurrentChatMeta({
+                    id: chatData.chat.id,
+                    title: chatData.chat.title,
+                    mode: chatData.chat.mode,
+                    createdAt: chatData.chat.createdAt,
+                    updatedAt: chatData.chat.updatedAt,
+                })
+                notifyChatListRefresh()
             }
 
             // Send message with chatId
@@ -108,26 +360,39 @@ const Hero = () => {
                 },
                 body: JSON.stringify({
                     message: userMessage,
-                    mode: selectedMode !== 'Select Modes' ? selectedMode : null,
+                    mode: normalizedMode,
                     chatId: chatId,
                 }),
             })
 
-            if (!response.ok) {
-                throw new Error('Failed to get response')
+            let payload: { response?: string; messageId?: string; error?: string } | null = null
+            try {
+                payload = await response.json()
+            } catch (jsonError) {
+                console.warn('Failed to parse AI response JSON:', jsonError)
             }
 
-            const data = await response.json()
+            if (!response.ok) {
+                const errorMessage =
+                    payload?.error ||
+                    `Failed to get response (${response.status} ${response.statusText})`
+                throw new Error(errorMessage)
+            }
+
+            if (!payload) {
+                throw new Error('Received empty response from assistant')
+            }
 
             // Add AI response to UI
             const aiMessageObj: Message = {
-                id: data.messageId || (Date.now() + 1).toString(),
-                content: data.response,
+                id: payload.messageId || (Date.now() + 1).toString(),
+                content: payload.response || 'No response returned.',
                 role: 'assistant',
                 createdAt: new Date(),
             }
 
             setMessages(prev => [...prev, aiMessageObj])
+            notifyChatListRefresh()
 
         } catch (error) {
             console.error('Error sending message:', error)
@@ -145,11 +410,15 @@ const Hero = () => {
         }
     }
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             handleSubmit()
         }
+    }
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setInputValue(e.target.value)
     }
 
     useEffect(() => {
@@ -172,22 +441,34 @@ const Hero = () => {
                 {/* Messages Container */}
                 {messages.length > 0 && (
                     <div className='w-full max-w-4xl -mb-3 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto px-4 -mt-6'>
-                        {messages.map((message) => (
-                            <div
-                                key={message.id}
-                                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                            >
+                        {messages.map((message) => {
+                            const isUser = message.role === 'user'
+                            return (
                                 <div
-                                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                                        message.role === 'user'
-                                            ? 'bg-blue-500 text-white'
-                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                                    }`}
+                                    key={message.id}
+                                    className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}
                                 >
-                                    <p className='text-sm whitespace-pre-wrap'>{message.content}</p>
+                                    <div
+                                        className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm border transition-colors ${
+                                            isUser
+                                                ? 'bg-blue-500/10 border-blue-100 dark:border-blue-500/40 text-white bg-linear-to-br from-blue-500 via-blue-500/80 to-blue-400'
+                                                : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-700'
+                                        }`}
+                                    >
+                                        <div className={`flex flex-wrap items-center gap-2 text-xs ${isUser ? 'text-white/80 justify-end' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            <span className='font-semibold'>{isUser ? 'You' : 'CortexAI'}</span>
+                                            <span>•</span>
+                                            <span>{formatTimestamp(message.createdAt)}</span>
+                                        </div>
+                                        <div className={`mt-2 prose prose-sm max-w-none dark:prose-invert ${isUser ? 'prose-p:text-white prose-strong:text-white prose-code:text-white' : ''}`}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                                                {message.content}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                         {isLoading && (
                             <div className='flex justify-start'>
                                 <div className='max-w-[80%] rounded-2xl px-4 py-3 bg-gray-100 dark:bg-gray-800'>
@@ -203,17 +484,25 @@ const Hero = () => {
                     </div>
                 )}
 
+                {isHydrating && (
+                    <div className='w-full max-w-4xl px-4 mt-4 text-sm text-gray-500 dark:text-gray-400 text-center'>
+                        Loading conversation...
+                    </div>
+                )}
+
                 {/* Input Container - Position changes based on whether there are messages */}
                 <div className={`w-full max-w-4xl px-4 ${messages.length > 0 ? 'mt-auto pb-8' : 'mt-5'}`}>
                     <div className='py-2.5 px-3 rounded-3xl bg-white dark:bg-gray-800 border dark:border-gray-700 shadow dark:shadow-gray-900'>
-                        <input 
-                            type="text" 
-                            placeholder='Ask a question...' 
+                        <textarea
+                            ref={inputRef}
+                            placeholder='Ask a question...'
                             value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            onKeyPress={handleKeyPress}
-                            disabled={isLoading}
-                            className='outline-none py-1.5 text-sm w-full bg-transparent text-gray-700 dark:text-gray-300 placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50' 
+                            onChange={handleInputChange}
+                            onKeyDown={handleKeyDown}
+                            disabled={isLoading || isHydrating}
+                            rows={1}
+                            spellCheck={false}
+                            className='outline-none text-sm w-full bg-transparent text-gray-700 dark:text-gray-300 placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50 resize-none leading-6 max-h-72'
                         />
                         <div className='flex items-center justify-between'>
                             <div className='mt-4 flex items-center gap-2'>
@@ -263,7 +552,7 @@ const Hero = () => {
                                 <Mic className='h-9 w-9 rounded-full cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-2 text-gray-700 dark:text-gray-300' />
                                 <button 
                                     onClick={handleSubmit}
-                                    disabled={isLoading || !inputValue.trim()}
+                                    disabled={isLoading || isHydrating || !inputValue.trim()}
                                     className='p-1.5 cursor-pointer rounded-full text-white bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors duration-200'
                                 >
                                     <ArrowUp className='w-5 h-5' />

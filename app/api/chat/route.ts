@@ -1,11 +1,3 @@
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '2mb', // Increase if needed
-    },
-  },
-};
-// app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getServerSession } from 'next-auth';
@@ -13,8 +5,122 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const MODEL_CANDIDATES = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+
+const MAX_BODY_SIZE_MB = 8;
+const MAX_BODY_SIZE_BYTES = MAX_BODY_SIZE_MB * 1024 * 1024;
+
+class PayloadTooLargeError extends Error {
+  constructor(message = `Request body exceeds ${MAX_BODY_SIZE_MB}MB limit`) {
+    super(message);
+    this.name = 'PayloadTooLargeError';
+  }
+}
+
+class InvalidJsonError extends Error {
+  constructor(message = 'Invalid JSON payload') {
+    super(message);
+    this.name = 'InvalidJsonError';
+  }
+}
+
+const RETRIABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const MAX_MODEL_RETRIES = 3;
+
+const delay = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const getErrorStatus = (error: unknown): number | undefined => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    typeof (error as { status?: unknown }).status === 'number'
+  ) {
+    return (error as { status: number }).status;
+  }
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'statusCode' in error &&
+    typeof (error as { statusCode?: unknown }).statusCode === 'number'
+  ) {
+    return (error as { statusCode: number }).statusCode;
+  }
+  return undefined;
+};
+
+async function callModelWithRetry<T>(call: () => Promise<T>, modelName: string): Promise<T> {
+  let attempt = 0;
+  while (attempt < MAX_MODEL_RETRIES) {
+    try {
+      return await call();
+    } catch (error) {
+      attempt += 1;
+      const status = getErrorStatus(error);
+      const shouldRetry =
+        attempt < MAX_MODEL_RETRIES &&
+        (status === undefined || RETRIABLE_STATUS.has(status));
+      console.warn(
+        `Gemini API call failed (model ${modelName}, attempt ${attempt}/${MAX_MODEL_RETRIES})`,
+        { status, error }
+      );
+      if (!shouldRetry) {
+        throw error;
+      }
+      const backoff = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+      await delay(backoff);
+    }
+  }
+  throw new Error('Exceeded maximum retries for Gemini API call');
+}
+
+async function parseRequestBody(request: NextRequest) {
+  const contentLengthHeader = request.headers.get('content-length');
+  if (
+    contentLengthHeader &&
+    Number(contentLengthHeader) > MAX_BODY_SIZE_BYTES
+  ) {
+    throw new PayloadTooLargeError();
+  }
+
+  const bodyText = await request.text();
+
+  const encodedLength = new TextEncoder().encode(bodyText).length;
+  if (encodedLength > MAX_BODY_SIZE_BYTES) {
+    throw new PayloadTooLargeError();
+  }
+
+  if (!bodyText) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    throw new InvalidJsonError();
+  }
+}
+
+async function generateResponseWithFallback(prompt: string) {
+  let lastError: unknown = null;
+  for (const modelName of MODEL_CANDIDATES) {
+    const model = genAI.getGenerativeModel({ model: modelName });
+    try {
+      const result = await callModelWithRetry(() => model.generateContent(prompt), modelName);
+      const response = await result.response;
+      const text = response.text();
+      return { text, modelName };
+    } catch (error) {
+      lastError = error;
+      console.warn(`Model ${modelName} failed, trying next fallback...`, error);
+    }
+  }
+  throw lastError ?? new Error('All models failed to generate a response');
+}
 
 export async function POST(request: NextRequest) {
+  let chatId: string | null = null;
   try {
     console.log('=== /api/chat POST endpoint called');
     
@@ -27,7 +133,12 @@ export async function POST(request: NextRequest) {
 
     console.log('Session user:', session.user.id);
 
-    const { message, mode, chatId } = await request.json();
+    const { message, mode, chatId: bodyChatId } = await parseRequestBody(request) as {
+      message?: string;
+      mode?: string;
+      chatId?: string;
+    };
+    chatId = bodyChatId ?? null;
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
@@ -60,8 +171,6 @@ export async function POST(request: NextRequest) {
     
     console.log('User message saved:', userMessage.id);
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
     // Create context based on selected mode
     let context = '';
     switch (mode) {
@@ -93,9 +202,8 @@ export async function POST(request: NextRequest) {
     const prompt = `${context}\n\nUser: ${message}\n\nProvide a helpful, professional response:`;
 
     console.log('Calling Gemini API');
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const { text, modelName } = await generateResponseWithFallback(prompt);
+    console.log('Gemini response received from model:', modelName);
     
     console.log('Gemini response received');
 
@@ -115,7 +223,62 @@ export async function POST(request: NextRequest) {
       messageId: assistantMessage.id,
     });
   } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json(
+        { error: error.message, maxSize: `${MAX_BODY_SIZE_MB}MB` },
+        { status: 413 }
+      );
+    }
+
+    if (error instanceof InvalidJsonError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
+    const status = getErrorStatus(error);
     console.error('Gemini API error:', error);
+
+    if (status && RETRIABLE_STATUS.has(status)) {
+      const fallbackText =
+        status === 503
+          ? 'CortexAI is temporarily overloaded. Please try again in a moment.'
+          : 'CortexAI is currently unavailable. Please try again shortly.';
+
+      try {
+        if (!chatId) {
+          return NextResponse.json(
+            { error: fallbackText },
+            { status }
+          );
+        }
+
+        const fallbackMessage = await prisma.message.create({
+          data: {
+            content: fallbackText,
+            role: 'assistant',
+            chatId,
+          },
+        });
+
+        return NextResponse.json(
+          {
+            response: fallbackText,
+            messageId: fallbackMessage.id,
+            degraded: true,
+          },
+          { status: 200 }
+        );
+      } catch (dbError) {
+        console.error('Failed to persist fallback message:', dbError);
+        return NextResponse.json(
+          { error: fallbackText },
+          { status }
+        );
+      }
+    }
+
     return NextResponse.json(
       { error: 'Failed to generate response' },
       { status: 500 }
