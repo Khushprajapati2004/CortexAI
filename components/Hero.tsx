@@ -68,9 +68,16 @@ const Hero = () => {
             if (inline) {
                 return <code className={`px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-[13px] ${className ?? ''}`} {...rest}>{children}</code>
             }
+            // For code blocks, return just the code element - the pre wrapper will be handled separately
+            return <code className={className} {...rest}>{children}</code>
+        },
+        pre(preProps) {
+            const { children, ...rest } = preProps
+            // react-markdown wraps code blocks in <pre><code>...</code></pre>
+            // We need to handle the pre wrapper separately to avoid nesting issues
             return (
-                <pre className='w-full overflow-x-auto rounded-xl bg-gray-900 text-gray-100 text-sm p-4 my-3 border border-gray-800'>
-                    <code className={className} {...rest}>{children}</code>
+                <pre className='w-full overflow-x-auto rounded-xl bg-gray-900 text-gray-100 text-sm p-4 my-3 border border-gray-800' {...rest}>
+                    {children}
                 </pre>
             )
         },
@@ -81,6 +88,17 @@ const Hero = () => {
             return <ol {...props} className={`list-decimal ml-5 space-y-1 text-sm text-gray-700 dark:text-gray-200 ${props.className ?? ''}`} />
         },
         p(props) {
+            // Check if children contain a pre element (code block)
+            // If so, don't wrap in p tag to avoid invalid HTML
+            const hasPre = React.Children.toArray(props.children).some(
+                (child) => React.isValidElement(child) && child.type === 'pre'
+            )
+            
+            if (hasPre) {
+                // Return children without p wrapper for code blocks
+                return <>{props.children}</>
+            }
+            
             return <p {...props} className={`text-sm leading-6 text-gray-700 dark:text-gray-200 ${props.className ?? ''}`} />
         },
         a(props) {
@@ -434,7 +452,7 @@ const Hero = () => {
                 {/* Messages Container - DeepSeek style */}
                 {messages.length > 0 && (
                     <div className='w-full flex-1 overflow-y-auto custom-chat-scrollbar'>
-                        <div className='max-w-3xl mx-auto px-4 py-6 space-y-6'>
+                        <div className='max-w-4xl mx-auto px-4 py-6 space-y-6'>
                         {messages.map((message) => {
                             const isUser = message.role === 'user'
                             return (
@@ -482,7 +500,7 @@ const Hero = () => {
 
                 {/* Input Container - DeepSeek style */}
                 <div className={`w-full ${messages.length > 0 ? 'mt-auto pb-6' : 'mt-5'}`}>
-                    <div className='max-w-3xl mx-auto px-4'>
+                    <div className='max-w-4xl mx-auto px-4'>
                         <div className='py-3 px-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm'>
                         <textarea
                             ref={inputRef}
