@@ -1,5 +1,5 @@
 // components/Hero.tsx
-import { ArrowUp, BadgeDollarSignIcon, Box, ChevronDown, CircleCheckBig, Dribbble, Info, Mic, Plus, ScrollText, ShoppingBag, ShoppingCart, ToolCase } from 'lucide-react'
+import { ArrowUp, BadgeDollarSignIcon, Box, ChevronDown, CircleCheckBig, Copy, Dribbble, Info, Mic, PencilLine, Plus, RotateCcw, ScrollText, ShoppingBag, ShoppingCart, ThumbsDown, ThumbsUp, ToolCase, X } from 'lucide-react'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
@@ -11,6 +11,7 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   createdAt: Date;
+  feedback?: 'like' | 'dislike' | null;
 }
 
 interface ApiMessage {
@@ -31,6 +32,11 @@ const Hero = () => {
     const [messages, setMessages] = useState<Message[]>([])
     const [currentChatId, setCurrentChatId] = useState<string | null>(null)
     const [currentChatMeta, setCurrentChatMeta] = useState<ChatMeta | null>(null)
+    const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null)
+    const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null)
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+    const [editValue, setEditValue] = useState('')
+    const editInputRef = useRef<HTMLTextAreaElement>(null)
     const dropdownRef = useRef<HTMLDivElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -432,6 +438,222 @@ const Hero = () => {
         setInputValue(e.target.value)
     }
 
+    const handleLike = (messageId: string) => {
+        setMessages(prev => prev.map(msg => 
+            msg.id === messageId 
+                ? { ...msg, feedback: msg.feedback === 'like' ? null : 'like' }
+                : msg
+        ))
+    }
+
+    const handleDislike = (messageId: string) => {
+        setMessages(prev => prev.map(msg => 
+            msg.id === messageId 
+                ? { ...msg, feedback: msg.feedback === 'dislike' ? null : 'dislike' }
+                : msg
+        ))
+    }
+
+    const handleCopy = async (content: string) => {
+        try {
+            await navigator.clipboard.writeText(content)
+            // You could add a toast notification here
+        } catch (error) {
+            console.error('Failed to copy:', error)
+        }
+    }
+
+    const handleRetry = async (messageId: string) => {
+        // Find the message to retry and the user message before it
+        const messageIndex = messages.findIndex(msg => msg.id === messageId)
+        if (messageIndex === -1 || messageIndex === 0) return
+
+        const assistantMessage = messages[messageIndex]
+        const userMessage = messages[messageIndex - 1]
+        
+        if (userMessage.role !== 'user' || assistantMessage.role !== 'assistant') return
+
+        setRetryingMessageId(messageId)
+        setIsLoading(true)
+
+        // Remove the old assistant message
+        setMessages(prev => prev.filter(msg => msg.id !== messageId))
+
+        try {
+            const normalizedMode = selectedMode !== 'Select Modes' ? selectedMode : null
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: userMessage.content,
+                    mode: normalizedMode,
+                    chatId: currentChatId,
+                }),
+            })
+
+            let payload: { response?: string; messageId?: string; error?: string } | null = null
+            try {
+                payload = await response.json()
+            } catch (jsonError) {
+                console.warn('Failed to parse AI response JSON:', jsonError)
+            }
+
+            if (!response.ok) {
+                const errorMessage =
+                    payload?.error ||
+                    `Failed to get response (${response.status} ${response.statusText})`
+                throw new Error(errorMessage)
+            }
+
+            if (!payload) {
+                throw new Error('Received empty response from assistant')
+            }
+
+            // Add new AI response
+            const aiMessageObj: Message = {
+                id: payload.messageId || (Date.now() + 1).toString(),
+                content: payload.response || 'No response returned.',
+                role: 'assistant',
+                createdAt: new Date(),
+            }
+
+            setMessages(prev => [...prev, aiMessageObj])
+            notifyChatListRefresh()
+        } catch (error) {
+            console.error('Error retrying message:', error)
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            const errorMessageObj: Message = {
+                id: (Date.now() + 1).toString(),
+                content: `Sorry, I encountered an error: ${errorMessage}`,
+                role: 'assistant',
+                createdAt: new Date(),
+            }
+            setMessages(prev => [...prev, errorMessageObj])
+        } finally {
+            setIsLoading(false)
+            setRetryingMessageId(null)
+        }
+    }
+
+    const handleEdit = (messageId: string) => {
+        const message = messages.find(msg => msg.id === messageId)
+        if (message && message.role === 'user') {
+            setEditingMessageId(messageId)
+            setEditValue(message.content)
+            // Focus the edit input after state update
+            setTimeout(() => {
+                editInputRef.current?.focus()
+                editInputRef.current?.setSelectionRange(
+                    editInputRef.current.value.length,
+                    editInputRef.current.value.length
+                )
+            }, 0)
+        }
+    }
+
+    const handleCancelEdit = () => {
+        setEditingMessageId(null)
+        setEditValue('')
+    }
+
+    const handleSaveEdit = async (messageId: string) => {
+        if (!editValue.trim()) {
+            handleCancelEdit()
+            return
+        }
+
+        const messageIndex = messages.findIndex(msg => msg.id === messageId)
+        if (messageIndex === -1) return
+
+        const message = messages[messageIndex]
+        if (message.role !== 'user') return
+
+        setIsLoading(true)
+        setEditingMessageId(null)
+
+        // Update the user message
+        setMessages(prev => prev.map(msg => 
+            msg.id === messageId 
+                ? { ...msg, content: editValue.trim() }
+                : msg
+        ))
+
+        // Remove all messages after this one (including the assistant response)
+        setMessages(prev => {
+            const index = prev.findIndex(msg => msg.id === messageId)
+            return prev.slice(0, index + 1)
+        })
+
+        try {
+            const normalizedMode = selectedMode !== 'Select Modes' ? selectedMode : null
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: editValue.trim(),
+                    mode: normalizedMode,
+                    chatId: currentChatId,
+                }),
+            })
+
+            let payload: { response?: string; messageId?: string; error?: string } | null = null
+            try {
+                payload = await response.json()
+            } catch (jsonError) {
+                console.warn('Failed to parse AI response JSON:', jsonError)
+            }
+
+            if (!response.ok) {
+                const errorMessage =
+                    payload?.error ||
+                    `Failed to get response (${response.status} ${response.statusText})`
+                throw new Error(errorMessage)
+            }
+
+            if (!payload) {
+                throw new Error('Received empty response from assistant')
+            }
+
+            // Add new AI response
+            const aiMessageObj: Message = {
+                id: payload.messageId || (Date.now() + 1).toString(),
+                content: payload.response || 'No response returned.',
+                role: 'assistant',
+                createdAt: new Date(),
+            }
+
+            setMessages(prev => [...prev, aiMessageObj])
+            notifyChatListRefresh()
+        } catch (error) {
+            console.error('Error sending edited message:', error)
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            const errorMessageObj: Message = {
+                id: (Date.now() + 1).toString(),
+                content: `Sorry, I encountered an error: ${errorMessage}`,
+                role: 'assistant',
+                createdAt: new Date(),
+            }
+            setMessages(prev => [...prev, errorMessageObj])
+        } finally {
+            setIsLoading(false)
+            setEditValue('')
+        }
+    }
+
+    const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, messageId: string) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            handleSaveEdit(messageId)
+        } else if (e.key === 'Escape') {
+            e.preventDefault()
+            handleCancelEdit()
+        }
+    }
+
     useEffect(() => {
         document.addEventListener('mousedown', handleClickOutside)
         return () => {
@@ -455,23 +677,121 @@ const Hero = () => {
                         <div className='max-w-4xl mx-auto px-4 py-6 space-y-6'>
                         {messages.map((message) => {
                             const isUser = message.role === 'user'
+                            const isHovered = hoveredMessageId === message.id
+                            const isRetrying = retryingMessageId === message.id
+                            const isEditing = editingMessageId === message.id
                             return (
                                 <div
                                     key={message.id}
                                     className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}
+                                    onMouseEnter={() => setHoveredMessageId(message.id)}
+                                    onMouseLeave={() => setHoveredMessageId(null)}
                                 >
-                                    <div
-                                        className={`max-w-[85%] rounded-lg px-4 py-3 transition-colors ${
-                                            isUser
-                                                ? 'bg-blue-500 text-white ml-auto'
-                                                : 'bg-gray-50 dark:bg-gray-800/50'
-                                        }`}
-                                    >
-                                        <div className={`prose prose-sm max-w-none dark:prose-invert ${isUser ? 'prose-p:text-white prose-strong:text-white prose-code:text-white prose-headings:text-white prose-a:text-blue-200 prose-li:text-white' : 'prose-p:text-gray-800 dark:prose-p:text-gray-200'}`}>
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                                                {message.content}
-                                            </ReactMarkdown>
-                                        </div>
+                                    <div className={`max-w-[85%] ${!isUser ? 'flex flex-col' : 'flex flex-col'}`}>
+                                        {isEditing && isUser ? (
+                                            // Edit mode for user messages
+                                            <div className="rounded-lg px-4 py-3 bg-blue-500 text-white ml-auto w-full">
+                                                <textarea
+                                                    ref={editInputRef}
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    onKeyDown={(e) => handleEditKeyDown(e, message.id)}
+                                                    className="w-full bg-transparent text-white placeholder-white/70 outline-none resize-none min-h-[60px] max-h-72"
+                                                    placeholder="Edit your message..."
+                                                    rows={3}
+                                                />
+                                                <div className="flex items-center justify-end gap-2 mt-2">
+                                                    <button
+                                                        onClick={handleCancelEdit}
+                                                        className="px-3 py-1.5 text-sm rounded-md bg-white/20 hover:bg-white/30 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleSaveEdit(message.id)}
+                                                        disabled={!editValue.trim() || isLoading}
+                                                        className="px-3 py-1.5 text-sm rounded-md bg-white text-blue-500 hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                                    >
+                                                        Save
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div
+                                                    className={`rounded-lg px-4 py-3 transition-colors ${
+                                                        isUser
+                                                            ? 'bg-blue-500 text-white ml-auto'
+                                                            : 'bg-gray-50 dark:bg-gray-800/50'
+                                                    }`}
+                                                >
+                                                    <div className={`prose prose-sm max-w-none dark:prose-invert ${isUser ? 'prose-p:text-white prose-strong:text-white prose-code:text-white prose-headings:text-white prose-a:text-blue-200 prose-li:text-white' : 'prose-p:text-gray-800 dark:prose-p:text-gray-200'}`}>
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                                                            {message.content}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                </div>
+                                                {/* Edit button for user messages */}
+                                                {isUser && (
+                                                    <div className={`flex items-center justify-end gap-1 mt-1 px-1 transition-opacity duration-200 ${
+                                                        isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                                                    }`}>
+                                                        <button
+                                                            onClick={() => handleEdit(message.id)}
+                                                            className="p-1.5 rounded-md text-white/80 hover:bg-white/20 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <PencilLine className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {/* Action buttons for assistant messages */}
+                                                {!isUser && (
+                                                    <div className={`flex items-center gap-1 mt-1 px-1 transition-opacity duration-200 ${
+                                                        isHovered ? 'opacity-100' : 'opacity-60'
+                                                    }`}>
+                                                        <button
+                                                            onClick={() => handleLike(message.id)}
+                                                            className={`p-1.5 rounded-md transition-colors ${
+                                                                message.feedback === 'like'
+                                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                                                                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                            }`}
+                                                            title="Like"
+                                                        >
+                                                            <ThumbsUp className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDislike(message.id)}
+                                                            className={`p-1.5 rounded-md transition-colors ${
+                                                                message.feedback === 'dislike'
+                                                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                                                                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                            }`}
+                                                            title="Dislike"
+                                                        >
+                                                            <ThumbsDown className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleCopy(message.content)}
+                                                            className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                            title="Copy"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleRetry(message.id)}
+                                                            disabled={isRetrying || isLoading}
+                                                            className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            title="Retry"
+                                                        >
+                                                            <RotateCcw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )
