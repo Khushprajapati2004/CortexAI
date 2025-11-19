@@ -58,13 +58,6 @@ const Hero = () => {
         textarea.style.height = `${nextHeight}px`
     }, [])
 
-    const formatTimestamp = (date: Date) => {
-        if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-            return ''
-        }
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-
     const markdownComponents: Components = {
         code(codeProps) {
             const { inline, className, children, ...rest } = codeProps as {

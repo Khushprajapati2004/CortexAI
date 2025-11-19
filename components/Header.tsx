@@ -14,30 +14,16 @@ import { useState, useEffect, useRef } from 'react';
 
 const Header = () => {
     const { isSidebarOpen, toggleSidebar } = useSidebar();
-    // Initialize dark mode from localStorage or current DOM state to prevent reset
-    const [isDarkMode, setIsDarkMode] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const savedDarkMode = localStorage.getItem('darkMode');
-            if (savedDarkMode) {
-                try {
-                    return JSON.parse(savedDarkMode);
-                } catch {
-                    // If parsing fails, check current DOM state
-                    return document.documentElement.classList.contains('dark');
-                }
-            }
-            // If no saved preference, check current DOM state
-            return document.documentElement.classList.contains('dark');
-        }
-        return false;
-    });
+    // Start with false to match server-side render, update after mount
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
     const [isDocumentModeOpen, setIsDocumentModeOpen] = useState(false);
     const [selectedDocumentMode, setSelectedDocumentMode] = useState('Document Mode');
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const isInitialMount = useRef(true);
 
-    // Initialize dark mode from localStorage on component mount and apply to DOM
+    // Initialize dark mode from localStorage after component mounts (client-side only)
     useEffect(() => {
+        setIsMounted(true);
         const savedDarkMode = localStorage.getItem('darkMode');
         const currentIsDark = document.documentElement.classList.contains('dark');
         
@@ -62,13 +48,11 @@ const Header = () => {
             setIsDarkMode(currentIsDark);
             localStorage.setItem('darkMode', JSON.stringify(currentIsDark));
         }
-        isInitialMount.current = false;
     }, []);
 
     // Apply dark mode class to document when mode changes and save to localStorage
-    // Skip saving on initial mount to prevent overwriting
     useEffect(() => {
-        if (isInitialMount.current) return;
+        if (!isMounted) return; // Skip on initial mount
         
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
@@ -76,7 +60,7 @@ const Header = () => {
             document.documentElement.classList.remove('dark');
         }
         localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
-    }, [isDarkMode]);
+    }, [isDarkMode, isMounted]);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -146,7 +130,7 @@ const Header = () => {
                                         className="p-2 cursor-pointer text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                                         onClick={toggleDarkMode}
                                     >
-                                        {isDarkMode ? (
+                                        {isMounted && isDarkMode ? (
                                             <Moon className="w-5 h-5" />
                                         ) : (
                                             <Sun className="w-5 h-5" />
