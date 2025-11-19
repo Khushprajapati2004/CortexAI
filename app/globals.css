@@ -167,3 +167,39 @@ body {
 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
   background: rgba(107, 114, 128, 0.5);
 }
+
+/* Custom scrollbar for chat messages - DeepSeek style */
+.custom-chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.6);
+}
+
+.dark .custom-chat-scrollbar {
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.dark .custom-chat-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+.dark .custom-chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}

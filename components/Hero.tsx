@@ -430,7 +430,7 @@ const Hero = () => {
 
     return (
         <>
-            <section className={`flex flex-col items-center h-[676px] ${messages.length > 0 ? 'pt-8' : 'pt-56'}`}>
+            <section className={`flex flex-col h-[676px] ${messages.length > 0 ? 'pt-4' : 'pt-56 items-center'}`}>
                 {/* Show title only when no messages */}
                 {messages.length === 0 && (
                     <div>
@@ -438,9 +438,10 @@ const Hero = () => {
                     </div>
                 )}
 
-                {/* Messages Container */}
+                {/* Messages Container - DeepSeek style */}
                 {messages.length > 0 && (
-                    <div className='w-full max-w-4xl -mb-3 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto px-4 -mt-6'>
+                    <div className='w-full flex-1 overflow-y-auto custom-chat-scrollbar'>
+                        <div className='max-w-3xl mx-auto px-4 py-6 space-y-6'>
                         {messages.map((message) => {
                             const isUser = message.role === 'user'
                             return (
@@ -449,18 +450,13 @@ const Hero = () => {
                                     className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}
                                 >
                                     <div
-                                        className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm border transition-colors ${
+                                        className={`max-w-[85%] rounded-lg px-4 py-3 transition-colors ${
                                             isUser
-                                                ? 'bg-blue-500/10 border-blue-100 dark:border-blue-500/40 text-white bg-linear-to-br from-blue-500 via-blue-500/80 to-blue-400'
-                                                : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-700'
+                                                ? 'bg-blue-500 text-white ml-auto'
+                                                : 'bg-gray-50 dark:bg-gray-800/50'
                                         }`}
                                     >
-                                        <div className={`flex flex-wrap items-center gap-2 text-xs ${isUser ? 'text-white/80 justify-end' : 'text-gray-500 dark:text-gray-400'}`}>
-                                            <span className='font-semibold'>{isUser ? 'You' : 'CortexAI'}</span>
-                                            <span>•</span>
-                                            <span>{formatTimestamp(message.createdAt)}</span>
-                                        </div>
-                                        <div className={`mt-2 prose prose-sm max-w-none dark:prose-invert ${isUser ? 'prose-p:text-white prose-strong:text-white prose-code:text-white' : ''}`}>
+                                        <div className={`prose prose-sm max-w-none dark:prose-invert ${isUser ? 'prose-p:text-white prose-strong:text-white prose-code:text-white prose-headings:text-white prose-a:text-blue-200 prose-li:text-white' : 'prose-p:text-gray-800 dark:prose-p:text-gray-200'}`}>
                                             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                                                 {message.content}
                                             </ReactMarkdown>
@@ -471,7 +467,7 @@ const Hero = () => {
                         })}
                         {isLoading && (
                             <div className='flex justify-start'>
-                                <div className='max-w-[80%] rounded-2xl px-4 py-3 bg-gray-100 dark:bg-gray-800'>
+                                <div className='max-w-[80%] rounded-lg px-4 py-3 bg-gray-50 dark:bg-gray-800/50'>
                                     <div className='flex space-x-2'>
                                         <div className='w-2 h-2 bg-gray-400 rounded-full animate-bounce'></div>
                                         <div className='w-2 h-2 bg-gray-400 rounded-full animate-bounce' style={{ animationDelay: '0.2s' }}></div>
@@ -480,19 +476,21 @@ const Hero = () => {
                                 </div>
                             </div>
                         )}
+                        </div>
                         <div ref={messagesEndRef} />
                     </div>
                 )}
 
                 {isHydrating && (
-                    <div className='w-full max-w-4xl px-4 mt-4 text-sm text-gray-500 dark:text-gray-400 text-center'>
+                    <div className='w-full max-w-3xl mx-auto px-4 mt-4 text-sm text-gray-500 dark:text-gray-400 text-center'>
                         Loading conversation...
                     </div>
                 )}
 
-                {/* Input Container - Position changes based on whether there are messages */}
-                <div className={`w-full max-w-4xl px-4 ${messages.length > 0 ? 'mt-auto pb-8' : 'mt-5'}`}>
-                    <div className='py-2.5 px-3 rounded-3xl bg-white dark:bg-gray-800 border dark:border-gray-700 shadow dark:shadow-gray-900'>
+                {/* Input Container - DeepSeek style */}
+                <div className={`w-full ${messages.length > 0 ? 'mt-auto pb-6' : 'mt-5'}`}>
+                    <div className='max-w-3xl mx-auto px-4'>
+                        <div className='py-3 px-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm'>
                         <textarea
                             ref={inputRef}
                             placeholder='Ask a question...'
@@ -558,6 +556,7 @@ const Hero = () => {
                                     <ArrowUp className='w-5 h-5' />
                                 </button>
                             </div>
+                        </div>
                         </div>
                     </div>
                 </div>
