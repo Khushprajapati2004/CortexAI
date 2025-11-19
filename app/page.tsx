@@ -21,10 +21,27 @@ const Home = () => {
         // Fetch user data on component mount
         const fetchUser = async () => {
             try {
+                // Try legacy auth token endpoint first
                 const response = await fetch('/api/auth/me');
                 if (response.ok) {
                     const userData = await response.json();
-                    setUser(userData.user);
+                    if (userData.user) {
+                        setUser(userData.user);
+                        return;
+                    }
+                }
+
+                // Fallback to NextAuth session (handles Google/OAuth logins)
+                const sessionResponse = await fetch('/api/auth/session');
+                if (sessionResponse.ok) {
+                    const sessionData = await sessionResponse.json();
+                    if (sessionData?.user) {
+                        setUser({
+                            id: sessionData.user.id || sessionData.user.email || 'session-user',
+                            username: sessionData.user.name || sessionData.user.email || 'User',
+                            email: sessionData.user.email || '',
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Failed to fetch user:', error);

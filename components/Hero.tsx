@@ -1,5 +1,5 @@
 // components/Hero.tsx
-import { ArrowUp, BadgeDollarSignIcon, Box, ChevronDown, CircleCheckBig, Copy, Dribbble, Info, Mic, PencilLine, Plus, RotateCcw, ScrollText, ShoppingBag, ShoppingCart, ThumbsDown, ThumbsUp, ToolCase, X } from 'lucide-react'
+import { AlertCircle, ArrowUp, BadgeDollarSignIcon, Box, ChevronDown, CircleCheckBig, Copy, Dribbble, Flag, Info, Mic, PencilLine, Plus, RotateCcw, ScrollText, ShoppingBag, ShoppingCart, ThumbsDown, ThumbsUp, ToolCase, X } from 'lucide-react'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
@@ -36,6 +36,11 @@ const Hero = () => {
     const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null)
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
     const [editValue, setEditValue] = useState('')
+    const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null)
+    const [feedbackText, setFeedbackText] = useState('')
+    const [selectedFeedbackReasons, setSelectedFeedbackReasons] = useState<string[]>([])
+    const [feedbackSuccessId, setFeedbackSuccessId] = useState<string | null>(null)
+    const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
     const editInputRef = useRef<HTMLTextAreaElement>(null)
     const dropdownRef = useRef<HTMLDivElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -50,6 +55,15 @@ const Hero = () => {
         { name: 'Purchasing', icon: <ShoppingBag className='h-4 w-4' /> },
         { name: 'Parts Analyzer', icon: <ToolCase className='h-4 w-4' /> },
         { name: 'Clear all' }
+    ]
+
+    const feedbackReasons = [
+        { id: 'inaccurate', label: 'Inaccurate' },
+        { id: 'out_of_date', label: 'Out of date' },
+        { id: 'too_short', label: 'Too short' },
+        { id: 'too_long', label: 'Too long' },
+        { id: 'harmful', label: 'Harmful or offensive' },
+        { id: 'not_helpful', label: 'Not helpful' },
     ]
 
     const scrollToBottom = () => {
@@ -537,6 +551,46 @@ const Hero = () => {
         }
     }
 
+    const handleOpenFeedback = (messageId: string) => {
+        if (feedbackMessageId === messageId) {
+            handleCloseFeedbackModal()
+            return
+        }
+        setFeedbackMessageId(messageId)
+        setFeedbackText('')
+        setSelectedFeedbackReasons([])
+        setFeedbackSuccessId(null)
+    }
+
+    const handleCloseFeedbackModal = () => {
+        setFeedbackMessageId(null)
+        setFeedbackText('')
+        setSelectedFeedbackReasons([])
+    }
+
+    const toggleFeedbackReason = (reasonId: string) => {
+        setSelectedFeedbackReasons(prev =>
+            prev.includes(reasonId)
+                ? prev.filter(id => id !== reasonId)
+                : [...prev, reasonId]
+        )
+    }
+
+    const handleSubmitFeedback = async (messageId: string) => {
+        if (!selectedFeedbackReasons.length && !feedbackText.trim()) return
+        setIsSubmittingFeedback(true)
+        try {
+            // Simulate async submission; replace with API call when available
+            await new Promise(resolve => setTimeout(resolve, 500))
+            setFeedbackSuccessId(messageId)
+            handleCloseFeedbackModal()
+        } catch (error) {
+            console.error('Failed to submit feedback:', error)
+        } finally {
+            setIsSubmittingFeedback(false)
+        }
+    }
+
     const handleEdit = (messageId: string) => {
         const message = messages.find(msg => msg.id === messageId)
         if (message && message.role === 'user') {
@@ -661,6 +715,8 @@ const Hero = () => {
         }
     }, [])
 
+    const canSubmitFeedback = selectedFeedbackReasons.length > 0 || feedbackText.trim().length > 0
+
     return (
         <>
             <section className={`flex flex-col h-[676px] ${messages.length > 0 ? 'pt-4' : 'pt-56 items-center'}`}>
@@ -690,7 +746,7 @@ const Hero = () => {
                                     <div className={`max-w-[85%] ${!isUser ? 'flex flex-col' : 'flex flex-col'}`}>
                                         {isEditing && isUser ? (
                                             // Edit mode for user messages
-                                            <div className="rounded-lg px-4 py-3 bg-blue-500 text-white ml-auto w-full">
+                                            <div className="rounded-lg px-4 py-3 bg-gray-600 text-white ml-auto w-full dark:bg-blue-500">
                                                 <textarea
                                                     ref={editInputRef}
                                                     value={editValue}
@@ -722,11 +778,15 @@ const Hero = () => {
                                                 <div
                                                     className={`rounded-lg px-4 py-3 transition-colors ${
                                                         isUser
-                                                            ? 'bg-blue-500 text-white ml-auto'
+                                                            ? 'bg-gray-300 text-black ml-auto dark:bg-blue-500 dark:text-white'
                                                             : 'bg-gray-50 dark:bg-gray-800/50'
                                                     }`}
                                                 >
-                                                    <div className={`prose prose-sm max-w-none dark:prose-invert ${isUser ? 'prose-p:text-white prose-strong:text-white prose-code:text-white prose-headings:text-white prose-a:text-blue-200 prose-li:text-white' : 'prose-p:text-gray-800 dark:prose-p:text-gray-200'}`}>
+                                                    <div className={`prose prose-sm max-w-none ${
+                                                        isUser
+                                                            ? 'prose-invert text-white **:text-black prose-headings:text-white prose-strong:text-white prose-code:text-white prose-a:text-blue-200'
+                                                            : 'dark:prose-invert prose-p:text-gray-800 dark:prose-p:text-gray-200'
+                                                    }`}>
                                                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                                                             {message.content}
                                                         </ReactMarkdown>
@@ -738,8 +798,15 @@ const Hero = () => {
                                                         isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
                                                     }`}>
                                                         <button
+                                                            onClick={() => handleCopy(message.content)}
+                                                            className="p-1.5 rounded-md text-black dark:text-white/80 hover:bg-gray-100 dark:hover:bg-white/20 transition-colors"
+                                                            title="Copy"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                        <button
                                                             onClick={() => handleEdit(message.id)}
-                                                            className="p-1.5 rounded-md text-white/80 hover:bg-white/20 transition-colors"
+                                                            className="p-1.5 rounded-md text-black dark:text-white/80 dark:hover:bg-white/20 hover:bg-gray-100 transition-colors"
                                                             title="Edit"
                                                         >
                                                             <PencilLine className="w-4 h-4" />
@@ -748,7 +815,7 @@ const Hero = () => {
                                                 )}
                                                 {/* Action buttons for assistant messages */}
                                                 {!isUser && (
-                                                    <div className={`flex items-center gap-1 mt-1 px-1 transition-opacity duration-200 ${
+                                                    <div className={`flex flex-wrap items-center gap-1 mt-1 px-1 transition-opacity duration-200 ${
                                                         isHovered ? 'opacity-100' : 'opacity-60'
                                                     }`}>
                                                         <button
@@ -788,7 +855,17 @@ const Hero = () => {
                                                         >
                                                             <RotateCcw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
                                                         </button>
+                                                        <button
+                                                            onClick={() => handleOpenFeedback(message.id)}
+                                                            className="p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                            title="Give feedback"
+                                                        >
+                                                            <Flag className="w-4 h-4" />
+                                                        </button>
                                                     </div>
+                                                )}
+                                                {feedbackSuccessId === message.id && (
+                                                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 px-1">Thanks for your feedback!</p>
                                                 )}
                                             </>
                                         )}
@@ -892,6 +969,78 @@ const Hero = () => {
                     </div>
                 </div>
             </section>
+
+            {feedbackMessageId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                    <div
+                        className="absolute inset-0 bg-black/50"
+                        onClick={handleCloseFeedbackModal}
+                    />
+                    <div className="relative w-full max-w-xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border border-gray-200 dark:border-gray-800 p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Help us improve</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Provide feedback on this answer. Select all that apply.</p>
+                            </div>
+                            <button
+                                onClick={handleCloseFeedbackModal}
+                                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-300"
+                                aria-label="Close feedback form"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                            {feedbackReasons.map((reason) => {
+                                const isSelected = selectedFeedbackReasons.includes(reason.id)
+                                return (
+                                    <button
+                                        key={reason.id}
+                                        onClick={() => toggleFeedbackReason(reason.id)}
+                                        className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+                                            isSelected
+                                                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-500/10 dark:text-blue-200'
+                                                : 'border-gray-200 text-gray-700 hover:border-gray-400 dark:border-gray-700 dark:text-gray-300 dark:hover:border-gray-500'
+                                        }`}
+                                    >
+                                        <AlertCircle className="w-4 h-4" />
+                                        {reason.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+                            How can the response be improved? (optional)
+                        </label>
+                        <textarea
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                            placeholder="Your feedback..."
+                            className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 min-h-[120px]"
+                        />
+
+                        <div className="flex justify-end gap-3 mt-4">
+                            <button
+                                onClick={handleCloseFeedbackModal}
+                                className="px-4 py-2 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleSubmitFeedback(feedbackMessageId)}
+                                disabled={!canSubmitFeedback || isSubmittingFeedback}
+                                className="px-4 py-2 rounded-full text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+                            >
+                                {isSubmittingFeedback ? 'Submitting...' : 'Submit'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     )
 }
