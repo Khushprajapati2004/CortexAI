@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Eye, EyeOff, Github } from 'lucide-react'
 import Link from 'next/link'
-import React, { useState, ChangeEvent, FormEvent } from 'react'
+import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 
@@ -92,6 +92,23 @@ const Login = () => {
             setOauthLoading(null)
         }
     }
+
+    // Preserve dark mode state on mount
+    useEffect(() => {
+        const savedDarkMode = localStorage.getItem('darkMode');
+        if (savedDarkMode) {
+            try {
+                const isDark = JSON.parse(savedDarkMode);
+                if (isDark) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+    }, []);
 
     return (
         <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">

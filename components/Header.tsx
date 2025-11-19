@@ -14,27 +14,62 @@ import { useState, useEffect, useRef } from 'react';
 
 const Header = () => {
     const { isSidebarOpen, toggleSidebar } = useSidebar();
-    const [isDarkMode, setIsDarkMode] = useState(false);
+    // Initialize dark mode from localStorage or current DOM state to prevent reset
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const savedDarkMode = localStorage.getItem('darkMode');
+            if (savedDarkMode) {
+                try {
+                    return JSON.parse(savedDarkMode);
+                } catch {
+                    // If parsing fails, check current DOM state
+                    return document.documentElement.classList.contains('dark');
+                }
+            }
+            // If no saved preference, check current DOM state
+            return document.documentElement.classList.contains('dark');
+        }
+        return false;
+    });
     const [isDocumentModeOpen, setIsDocumentModeOpen] = useState(false);
     const [selectedDocumentMode, setSelectedDocumentMode] = useState('Document Mode');
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const isInitialMount = useRef(true);
 
-    // Initialize dark mode from localStorage on component mount
+    // Initialize dark mode from localStorage on component mount and apply to DOM
     useEffect(() => {
         const savedDarkMode = localStorage.getItem('darkMode');
+        const currentIsDark = document.documentElement.classList.contains('dark');
+        
         if (savedDarkMode) {
-            const isDark = JSON.parse(savedDarkMode);
-            setIsDarkMode(isDark);
-            if (isDark) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
+            try {
+                const isDark = JSON.parse(savedDarkMode);
+                setIsDarkMode(isDark);
+                // Only apply if it differs from current state
+                if (isDark !== currentIsDark) {
+                    if (isDark) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                }
+            } catch {
+                // If parsing fails, use current DOM state
+                setIsDarkMode(currentIsDark);
             }
+        } else {
+            // If no saved preference, use current DOM state and save it
+            setIsDarkMode(currentIsDark);
+            localStorage.setItem('darkMode', JSON.stringify(currentIsDark));
         }
+        isInitialMount.current = false;
     }, []);
 
     // Apply dark mode class to document when mode changes and save to localStorage
+    // Skip saving on initial mount to prevent overwriting
     useEffect(() => {
+        if (isInitialMount.current) return;
+        
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
         } else {
