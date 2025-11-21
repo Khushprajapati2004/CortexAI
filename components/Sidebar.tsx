@@ -114,6 +114,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     }, []);
 
+    // after refresh the page show the chat 
     useEffect(() => {
         const handleActiveChat = (event: Event) => {
             const detail = (event as CustomEvent<{ chatId: string | null }>).detail;
@@ -133,7 +134,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         };
     }, [fetchChats]);
 
-    // Close menu when clicking outside
+    // close menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (openMenuId !== null) {
@@ -150,22 +151,25 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         };
     }, [openMenuId]);
 
-    // Focus search input when search opens
+    // focus search input when search opens
     useEffect(() => {
         if (isSearchOpen && searchInputRef.current) {
             searchInputRef.current.focus();
         }
     }, [isSearchOpen]);
 
+    // when i click on the ellipse than open the rename and delete option model
     const handleEllipsisClick = (chatId: string, event: React.MouseEvent) => {
         event.stopPropagation();
         setOpenMenuId(openMenuId === chatId ? null : chatId);
     };
 
+    // search open handler
     const handleSearchClick = () => {
         setIsSearchOpen(true);
     };
 
+    //search close handler
     const handleSearchClose = () => {
         setIsSearchOpen(false);
         setSearchQuery('');
@@ -185,8 +189,9 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     };
 
+    // new chat open handler
     const handleNewChat = () => {
-        // Navigate to home page
+        // navigate to home page
         window.history.pushState({}, '', '/');
         
         window.dispatchEvent(new CustomEvent('chat:select', { detail: { chatId: null } }));
@@ -194,6 +199,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         closeIfMobile();
     };
 
+    // when i click on the chat than open chat
     const handleChatClick = (chatId: string) => {
         setActiveChatId(chatId);
         setOpenMenuId(null);
@@ -205,6 +211,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         closeIfMobile();
     };
 
+    // chat delete handler
     const handleDeleteChat = async (chatId: string) => {
         try {
             if (user) {
@@ -226,6 +233,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     };
 
+    // rename chat handler
     const handleRenameChat = async (chatId: string, newTitle: string) => {
         try {
             if (user) {
@@ -251,6 +259,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     };
 
+    // date formate
     const formatDate = (dateString: string, fallback?: string) => {
         const date = new Date(dateString || fallback || new Date().toISOString());
         const today = new Date();

@@ -216,24 +216,37 @@ const Header = () => {
         if (!activeChatId) return;
 
         const newFavoriteState = !isFavorite;
+        console.log('Toggling favorite for chat:', activeChatId, 'from', isFavorite, 'to', newFavoriteState);
+        
+        // Update UI immediately for better UX
         setIsFavorite(newFavoriteState);
         
-        // Update in ChatStorage
+        // Update in ChatStorage (localStorage)
         ChatStorage.updateChat(activeChatId, { isFavorite: newFavoriteState });
+        console.log('Updated localStorage. Verifying:', ChatStorage.getChat(activeChatId)?.isFavorite);
         
         // Try to update in database if user is logged in
         try {
-            await fetch(`/api/chats/${activeChatId}`, {
+            const response = await fetch(`/api/chats/${activeChatId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isFavorite: newFavoriteState }),
             });
+            
+            if (response.ok) {
+                console.log('Successfully updated favorite in database');
+            } else {
+                console.warn('Failed to update favorite in database:', response.status);
+            }
         } catch (error) {
             console.error('Failed to update favorite in database:', error);
+            // Even if database update fails, localStorage is updated
         }
         
-        // Reload favorites immediately
-        loadFavoriteChats();
+        // Reload favorites immediately to update the dropdown
+        setTimeout(() => {
+            loadFavoriteChats();
+        }, 100);
         
         // Dispatch event to refresh sidebar
         window.dispatchEvent(new CustomEvent('chat:list-refresh'));
@@ -436,7 +449,7 @@ const Header = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <Heart className="w-4 h-4 fill-red-500 text-red-500 ml-2 flex-shrink-0" />
+                                                    <Heart className="w-4 h-4 fill-red-500 text-red-500 ml-2 flex shrink-0" />
                                                 </button>
                                             ))
                                         )}

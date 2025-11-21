@@ -85,7 +85,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { title } = await request.json();
+    const body = await request.json();
+    const { title, isFavorite } = body;
 
     const chat = await prisma.chat.findFirst({
       where: {
@@ -98,9 +99,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
+    // Build update data object with only provided fields
+    const updateData: { title?: string; isFavorite?: boolean } = {};
+    if (title !== undefined) updateData.title = title;
+    if (isFavorite !== undefined) updateData.isFavorite = isFavorite;
+
     const updatedChat = await prisma.chat.update({
       where: { id: id },
-      data: { title },
+      data: updateData,
     });
 
     return NextResponse.json({ chat: updatedChat });
