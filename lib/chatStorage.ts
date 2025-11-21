@@ -33,6 +33,7 @@ const readChats = (): StoredChat[] => {
     return parsed.map((chat) => ({
       ...chat,
       mode: chat.mode ?? null,
+      isFavorite: chat.isFavorite ?? false,
       messages: Array.isArray(chat.messages) ? chat.messages : [],
     }));
   } catch {
@@ -90,6 +91,7 @@ export const ChatStorage = {
 
   saveChat(chat: StoredChat) {
     const normalized = normalizeChat(chat);
+    console.log('Saving chat:', chat.id, 'isFavorite:', chat.isFavorite, 'normalized:', normalized.isFavorite);
     const chats = readChats();
     const index = chats.findIndex((c) => c.id === chat.id);
     if (index >= 0) {
@@ -98,6 +100,7 @@ export const ChatStorage = {
       chats.unshift(normalized);
     }
     writeChats(sortChats(chats));
+    console.log('Chat saved. Verifying:', ChatStorage.getChat(chat.id)?.isFavorite);
   },
 
   appendMessage(chatId: string, message: StoredMessage) {
@@ -112,8 +115,12 @@ export const ChatStorage = {
   updateChat(chatId: string, data: Partial<Omit<StoredChat, 'id'>>) {
     const chats = readChats();
     const index = chats.findIndex((c) => c.id === chatId);
-    if (index === -1) return;
+    if (index === -1) {
+      console.warn('updateChat: Chat not found:', chatId);
+      return;
+    }
     const chat = chats[index];
+    console.log('Updating chat:', chatId, 'current isFavorite:', chat.isFavorite, 'new isFavorite:', data.isFavorite);
     chats[index] = normalizeChat({
       ...chat,
       ...data,
@@ -121,6 +128,7 @@ export const ChatStorage = {
       messages: data.messages ?? chat.messages,
     });
     writeChats(sortChats(chats));
+    console.log('Chat updated. Verifying:', ChatStorage.getChat(chatId)?.isFavorite);
   },
 
   deleteChat(chatId: string) {

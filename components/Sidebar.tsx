@@ -1,7 +1,7 @@
 // components/Sidebar.tsx
 'use client';
 
-import { CirclePlus, Ellipsis, Heart, PanelRightOpen, PencilLine, Search, SquarePen, Trash, X } from 'lucide-react';
+import { CirclePlus, Ellipsis, PanelRightOpen, PencilLine, Search, SquarePen, Trash, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import UserProfile from './UserProfile';
@@ -67,7 +67,24 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                     if ((data.chats || []).length === 0) {
                         setChats(mapStoredChats(ChatStorage.getChats()));
                     } else {
-                        setChats(data.chats || []);
+                        // Merge database chats with localStorage to preserve isFavorite
+                        const localChats = ChatStorage.getChats();
+                        const mergedChats = (data.chats || []).map((dbChat: Chat) => {
+                            const localChat = localChats.find(lc => lc.id === dbChat.id);
+                            return {
+                                ...dbChat,
+                                isFavorite: dbChat.isFavorite ?? localChat?.isFavorite ?? false
+                            };
+                        });
+                        setChats(mergedChats);
+                        
+                        // Sync back to localStorage
+                        mergedChats.forEach((chat: Chat) => {
+                            const localChat = localChats.find(lc => lc.id === chat.id);
+                            if (localChat && localChat.isFavorite !== chat.isFavorite) {
+                                ChatStorage.updateChat(chat.id, { isFavorite: chat.isFavorite });
+                            }
+                        });
                     }
                 } else {
                     setChats(mapStoredChats(ChatStorage.getChats()));
@@ -169,6 +186,9 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
     };
 
     const handleNewChat = () => {
+        // Navigate to home page
+        window.history.pushState({}, '', '/');
+        
         window.dispatchEvent(new CustomEvent('chat:select', { detail: { chatId: null } }));
         setActiveChatId(null);
         closeIfMobile();
@@ -177,6 +197,10 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
     const handleChatClick = (chatId: string) => {
         setActiveChatId(chatId);
         setOpenMenuId(null);
+        
+        // Navigate to chat URL
+        window.history.pushState({}, '', `/chat/${chatId}`);
+        
         window.dispatchEvent(new CustomEvent('chat:select', { detail: { chatId } }));
         closeIfMobile();
     };
@@ -243,27 +267,6 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                 day: 'numeric',
                 year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
             });
-        }
-    };
-
-    const toggleFavorite = async (chatId: string, nextValue: boolean) => {
-        setChats(prev =>
-            prev.map(chat =>
-                chat.id === chatId ? { ...chat, isFavorite: nextValue } : chat
-            )
-        );
-        ChatStorage.updateChat(chatId, { isFavorite: nextValue });
-
-        try {
-            if (user) {
-                await fetch(`/api/chats/${chatId}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ isFavorite: nextValue }),
-                });
-            }
-        } catch (error) {
-            console.error('Failed to update favorite:', error);
         }
     };
 
@@ -451,15 +454,6 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                                                             }}
                                                         >
                                                             <PencilLine className='w-4 h-4' /> Rename
-                                                        </button>
-                                                        <button
-                                                            className="w-full px-4 cursor-pointer flex items-center gap-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors"
-                                                            onClick={() => toggleFavorite(chat.id, !chat.isFavorite)}
-                                                        >
-                                                            <Heart
-                                                                className={`h-4 w-4 ${chat.isFavorite ? 'fill-red-500 text-red-500' : ''}`}
-                                                            />
-                                                            {chat.isFavorite ? 'Unfavorite' : 'Favorite'}
                                                         </button>
                                                         <button 
                                                             className="w-full cursor-pointer flex items-center gap-2 px-4 py-2 text-red-700 dark:text-red-500 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors"

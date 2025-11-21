@@ -30,6 +30,8 @@ const Hero = () => {
     const [isLoading, setIsLoading] = useState(false)
     const [isHydrating, setIsHydrating] = useState(false)
     const [messages, setMessages] = useState<Message[]>([])
+    const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
+    const [streamingContent, setStreamingContent] = useState('')
     const [currentChatId, setCurrentChatId] = useState<string | null>(null)
     const [currentChatMeta, setCurrentChatMeta] = useState<ChatMeta | null>(null)
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null)
@@ -243,6 +245,24 @@ const Hero = () => {
                     createdAt: chat.createdAt,
                     updatedAt: chat.updatedAt,
                 })
+                
+                // Save to localStorage to sync with database
+                const serializedMessages = hydratedMessages.map((msg) => ({
+                    id: msg.id,
+                    content: msg.content,
+                    role: msg.role,
+                    createdAt: msg.createdAt.toISOString(),
+                }))
+                ChatStorage.saveChat({
+                    id: chat.id,
+                    title: chat.title,
+                    mode: chat.mode,
+                    createdAt: chat.createdAt,
+                    updatedAt: chat.updatedAt,
+                    isFavorite: chat.isFavorite || false,
+                    messages: serializedMessages,
+                })
+                
                 hydrated = true
             }
         } catch (error) {
@@ -314,6 +334,10 @@ const Hero = () => {
     useEffect(() => {
         if (!currentChatId || !currentChatMeta) return
         const normalizedMode = selectedMode !== 'Select Modes' ? selectedMode : null
+        
+        // Get existing chat to preserve isFavorite
+        const existingChat = ChatStorage.getChat(currentChatId);
+        
         const serializedMessages = messages.map((message) => ({
             id: message.id,
             content: message.content,
@@ -326,6 +350,7 @@ const Hero = () => {
             mode: normalizedMode,
             createdAt: currentChatMeta.createdAt,
             updatedAt: new Date().toISOString(),
+            isFavorite: existingChat?.isFavorite || false,
             messages: serializedMessages,
         })
         notifyChatListRefresh()
@@ -372,6 +397,10 @@ const Hero = () => {
 
                 const chatData = await chatResponse.json()
                 chatId = chatData.chat.id
+                
+                // Navigate to chat URL
+                window.history.pushState({}, '', `/chat/${chatId}`);
+                
                 setActiveChat(chatId, normalizedMode)
                 setCurrentChatMeta({
                     id: chatData.chat.id,
@@ -414,15 +443,38 @@ const Hero = () => {
                 throw new Error('Received empty response from assistant')
             }
 
-            // Add AI response to UI
+            // Stream AI response with typewriter effect
+            const fullResponse = payload.response || 'No response returned.';
+            const aiMessageId = payload.messageId || (Date.now() + 1).toString();
+            
+            // Add empty message first
             const aiMessageObj: Message = {
-                id: payload.messageId || (Date.now() + 1).toString(),
-                content: payload.response || 'No response returned.',
+                id: aiMessageId,
+                content: '',
                 role: 'assistant',
                 createdAt: new Date(),
             }
-
             setMessages(prev => [...prev, aiMessageObj])
+            setStreamingMessageId(aiMessageId)
+            
+            // Stream the response character by character
+            let currentIndex = 0;
+            const streamInterval = setInterval(() => {
+                if (currentIndex < fullResponse.length) {
+                    const chunkSize = Math.floor(Math.random() * 3) + 1; // Random 1-3 characters
+                    const nextChunk = fullResponse.slice(currentIndex, currentIndex + chunkSize);
+                    currentIndex += chunkSize;
+                    
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === aiMessageId 
+                            ? { ...msg, content: fullResponse.slice(0, currentIndex) }
+                            : msg
+                    ))
+                } else {
+                    clearInterval(streamInterval);
+                    setStreamingMessageId(null);
+                }
+            }, 20); // 20ms delay between chunks for smooth streaming
             notifyChatListRefresh()
 
         } catch (error) {
@@ -525,15 +577,38 @@ const Hero = () => {
                 throw new Error('Received empty response from assistant')
             }
 
-            // Add new AI response
+            // Stream AI response with typewriter effect
+            const fullResponse = payload.response || 'No response returned.';
+            const aiMessageId = payload.messageId || (Date.now() + 1).toString();
+            
+            // Add empty message first
             const aiMessageObj: Message = {
-                id: payload.messageId || (Date.now() + 1).toString(),
-                content: payload.response || 'No response returned.',
+                id: aiMessageId,
+                content: '',
                 role: 'assistant',
                 createdAt: new Date(),
             }
-
             setMessages(prev => [...prev, aiMessageObj])
+            setStreamingMessageId(aiMessageId)
+            
+            // Stream the response character by character
+            let currentIndex = 0;
+            const streamInterval = setInterval(() => {
+                if (currentIndex < fullResponse.length) {
+                    const chunkSize = Math.floor(Math.random() * 3) + 1;
+                    currentIndex += chunkSize;
+                    
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === aiMessageId 
+                            ? { ...msg, content: fullResponse.slice(0, currentIndex) }
+                            : msg
+                    ))
+                } else {
+                    clearInterval(streamInterval);
+                    setStreamingMessageId(null);
+                }
+            }, 20);
+            
             notifyChatListRefresh()
         } catch (error) {
             console.error('Error retrying message:', error)
