@@ -263,24 +263,51 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         }
     };
 
-    // date formate
+    // date format with better grouping
     const formatDate = (dateString: string, fallback?: string) => {
         const date = new Date(dateString || fallback || new Date().toISOString());
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
         
-        if (date.toDateString() === today.toDateString()) {
+        const lastWeek = new Date(today);
+        lastWeek.setDate(lastWeek.getDate() - 7);
+        
+        const lastMonth = new Date(today);
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        
+        const chatDate = new Date(date);
+        chatDate.setHours(0, 0, 0, 0);
+        
+        // Today
+        if (chatDate.getTime() === today.getTime()) {
             return 'Today';
-        } else if (date.toDateString() === yesterday.toDateString()) {
-            return 'Yesterday';
-        } else {
-            return date.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric',
-                year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
-            });
         }
+        
+        // Yesterday
+        if (chatDate.getTime() === yesterday.getTime()) {
+            return 'Yesterday';
+        }
+        
+        // Last 7 days
+        if (chatDate >= lastWeek && chatDate < yesterday) {
+            return 'Previous 7 Days';
+        }
+        
+        // Last 30 days
+        if (chatDate >= lastMonth && chatDate < lastWeek) {
+            return 'Previous 30 Days';
+        }
+        
+        // Older - group by month
+        const monthYear = date.toLocaleDateString('en-US', { 
+            month: 'long',
+            year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+        });
+        
+        return monthYear;
     };
 
     const groupChatsByDate = () => {
@@ -289,16 +316,29 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
 
         const grouped: { [key: string]: Chat[] } = {};
 
+        // Add favorites first
         if (favorites.length > 0) {
-            grouped['Favorites'] = favorites;
+            grouped['Favorites'] = favorites.sort((a, b) => 
+                new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+            );
         }
 
+        // Group non-favorites by date
         nonFavorites.forEach(chat => {
             const dateKey = formatDate(chat.updatedAt || chat.createdAt, chat.createdAt);
             if (!grouped[dateKey]) {
                 grouped[dateKey] = [];
             }
             grouped[dateKey].push(chat);
+        });
+
+        // Sort chats within each date group by most recent first
+        Object.keys(grouped).forEach(key => {
+            if (key !== 'Favorites') {
+                grouped[key].sort((a, b) => 
+                    new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+                );
+            }
         });
 
         return grouped;
@@ -407,6 +447,26 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                                     filteredChats.some(filteredChat => filteredChat.id === chat.id)
                                 )
                             )
+                            .sort(([dateA], [dateB]) => {
+                                // Custom sort order for date groups
+                                const order = ['Favorites', 'Today', 'Yesterday', 'Previous 7 Days', 'Previous 30 Days'];
+                                const indexA = order.indexOf(dateA);
+                                const indexB = order.indexOf(dateB);
+                                
+                                // If both are in the predefined order, sort by that order
+                                if (indexA !== -1 && indexB !== -1) {
+                                    return indexA - indexB;
+                                }
+                                
+                                // If only A is in predefined order, it comes first
+                                if (indexA !== -1) return -1;
+                                
+                                // If only B is in predefined order, it comes first
+                                if (indexB !== -1) return 1;
+                                
+                                // Both are month names, sort by most recent (reverse alphabetical for months)
+                                return dateB.localeCompare(dateA);
+                            })
                             .map(([date, dateChats]) => (
                                 <div key={date} className="p-4">
                                     <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
