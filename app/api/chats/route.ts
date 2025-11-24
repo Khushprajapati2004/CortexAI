@@ -35,44 +35,23 @@ export async function POST(request: NextRequest) {
         const session = await getServerSession(authOptions);
 
         if (!session?.user?.id) {
-            console.error('No session or user id:', { hasSession: !!session, userId: session?.user?.id });
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const userId = session.user.id;
-        console.log('=== Creating chat for user:', userId);
 
-        let user = null;
-        
-        // Step 1: Try to find user by session ID only
-        try {
+        // Find or create user
+        let user = await prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user && session.user.email) {
             user = await prisma.user.findUnique({
-                where: { id: userId },
+                where: { email: session.user.email },
             });
-            if (user) {
-                console.log('✓ User exists with session ID:', userId);
-            }
-        } catch (err) {
-            console.warn('Error finding user by ID:', err);
         }
 
-        // Step 2: If user doesn't exist, try to find by email and use that user
-        if (!user && typeof session.user.email === 'string') {
-            try {
-                user = await prisma.user.findUnique({
-                    where: { email: session.user.email },
-                });
-                if (user) {
-                    console.log('✓ User found by email (fallback):', user.email);
-                }
-            } catch (err) {
-                console.warn('Error finding user by email:', err);
-            }
-        }
-
-        // Step 3: If still no user, create one with the session ID and email
         if (!user) {
-            console.log('! User not found by ID or email, creating new user with session ID:', userId);
             try {
                 user = await prisma.user.create({
                     data: {
@@ -82,39 +61,23 @@ export async function POST(request: NextRequest) {
                         name: session.user.name,
                         image: session.user.image,
                         isVerified: true,
-                        isLoggedIn: true,
                         provider: 'oauth',
                     },
                 });
-                console.log('✓ User created successfully:', user.id);
             } catch (createError: unknown) {
                 if (
                     typeof createError === 'object' &&
                     createError !== null &&
                     'code' in createError &&
-                    (createError as { code?: string }).code === 'P2002'
+                    (createError as { code?: string }).code === 'P2002' &&
+                    session.user.email
                 ) {
-                    // Unique constraint failed on email, so fetch the user by email
-                    if (typeof session.user.email === 'string') {
-                        user = await prisma.user.findUnique({
-                            where: { email: session.user.email },
-                        });
-                        if (user) {
-                            console.log('✓ User found by email after constraint error:', user.email);
-                        } else {
-                            console.error('✗ CRITICAL: Cannot find user after constraint error');
-                            return NextResponse.json({ 
-                                error: 'User account issue. Please try logging in again.' 
-                            }, { status: 401 });
-                        }
-                    } else {
-                        console.error('✗ CRITICAL: Email not available after constraint error');
-                        return NextResponse.json({ 
-                            error: 'User account issue. Please try logging in again.' 
-                        }, { status: 401 });
-                    }
-                } else {
-                    console.error('✗ FAILED to create user:', createError);
+                    user = await prisma.user.findUnique({
+                        where: { email: session.user.email },
+                    });
+                }
+                
+                if (!user) {
                     return NextResponse.json({ 
                         error: 'User account issue. Please try logging in again.' 
                     }, { status: 401 });
@@ -122,47 +85,25 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Always use the database user ID for chat creation
-        if (!user) {
-            console.error('✗ CRITICAL: No user found for chat creation');
-            return NextResponse.json({ error: 'User account issue. Please try logging in again.' }, { status: 401 });
-        }
-
-        // Step 3: Verify user exists before creating chat
-        if (!user || !user.id) {
-            console.error('✗ User verification failed');
-            return NextResponse.json({ 
-                error: 'User account not properly initialized' 
-            }, { status: 500 });
-        }
-
-        // Step 4: Parse request body
         const { title, mode } = await request.json();
 
         if (!title || !title.trim()) {
             return NextResponse.json({ error: 'Title is required' }, { status: 400 });
         }
 
-      
-            // Step 5: CREATE CHAT - Use database user ID!
-            console.log('→ Creating chat for user:', user.id);
-            const chat = await prisma.chat.create({
-                data: {
-                    title: title.trim(),
-                    mode: mode || null,
-                    userId: user.id,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                },
-            });
+        const chat = await prisma.chat.create({
+            data: {
+                title: title.trim(),
+                mode: mode || null,
+                userId: user.id,
+            },
+        });
 
-        console.log('✓ Chat created successfully:', chat.id);
         return NextResponse.json({ chat });
     } catch (error) {
-        console.error('✗ Failed to create chat:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error('Failed to create chat:', error);
         return NextResponse.json({ 
-            error: `Failed to create chat: ${errorMessage}` 
+            error: 'Failed to create chat' 
         }, { status: 500 });
     }
 }

@@ -1,7 +1,7 @@
 // components/Sidebar.tsx
 'use client';
 
-import { CirclePlus, Ellipsis, PanelRightOpen, PencilLine, Search, SquarePen, Trash, X } from 'lucide-react';
+import { Ellipsis, PanelRightOpen, PencilLine, Search, SquarePen, Trash, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import UserProfile from './UserProfile';
@@ -405,22 +405,18 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                             )}
                         </div>
 
-                        <SquarePen className="w-5 h-5 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 cursor-pointer" />
+                        <button
+                            onClick={handleNewChat}
+                            className="p-2 rounded-lg transition-colors cursor-pointer"
+                            title="New chat"
+                        >
+                            <SquarePen className="w-5 h-5 text-gray-400 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 cursor-pointer" />
+                        </button>
                     </div>
                 </div>
 
-                {/* New Chat Button */}
-                <div className='flex justify-center mx-3 rounded-full py-2 my-2 bg-gray-500 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 text-white'>
-                    <button 
-                        onClick={handleNewChat}
-                        className='flex items-center justify-center gap-2 text-base font-semibold cursor-pointer'
-                    >
-                        <CirclePlus className='w-4 h-4' /> New chat
-                    </button>
-                </div>
-
                 {/* Chats List */}
-            <div className="flex-1 overflow-y-auto h-full pb-20 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ maxHeight: 'calc(100vh - 130px)' }}>
                     {isLoading ? (
                         <div className="flex justify-center items-center py-8">
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-500"></div>
@@ -544,8 +540,8 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
                     )}
                 </div>
 
-                {/* Updated Footer Section */}
-                <div className='absolute bottom-4 left-0 right-0 px-4'>
+                {/* Footer Section */}
+                <div className='absolute bottom-0 left-0 right-0 px-4 pb-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 pt-3'>
                     {user ? (
                         // Show user profile when logged in
                         <div className="flex justify-center">

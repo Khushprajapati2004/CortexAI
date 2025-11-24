@@ -137,9 +137,14 @@ body {
   }
 }
 
-/* Custom scrollbar for sidebar - Always visible with smooth styling */
+/* Custom scrollbar for sidebar - Shows only when needed */
 .custom-scrollbar {
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.custom-scrollbar:hover {
   scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
 }
 
@@ -153,26 +158,30 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.3);
+  background: transparent;
   border-radius: 9999px;
-  transition: background 0.2s ease;
+  transition: background 0.3s ease;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
+  background: rgba(156, 163, 175, 0.5) !important;
 }
 
 /* Dark mode scrollbar */
-.dark .custom-scrollbar {
+.dark .custom-scrollbar:hover {
   scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+.dark .custom-scrollbar:hover::-webkit-scrollbar-thumb {
   background: rgba(156, 163, 175, 0.4);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.6);
+  background: rgba(156, 163, 175, 0.6) !important;
 }
 
 /* Custom scrollbar for chat messages - DeepSeek style */

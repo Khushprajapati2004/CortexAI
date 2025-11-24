@@ -334,11 +334,7 @@ const Hero = () => {
             isFavorite: existingChat?.isFavorite || false,
             messages: serializedMessages,
         })
-        // Only notify on actual message changes, not on every render
-        if (messages.length > 0) {
-            notifyChatListRefresh()
-        }
-    }, [currentChatId, currentChatMeta, messages, selectedMode])
+    }, [currentChatId, currentChatMeta, messages, selectedMode, notifyChatListRefresh])
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {

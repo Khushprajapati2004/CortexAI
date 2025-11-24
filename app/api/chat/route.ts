@@ -108,9 +108,9 @@ async function generateResponseWithFallback(prompt: string) {
     const model = genAI.getGenerativeModel({ model: modelName });
     try {
       const result = await callModelWithRetry(() => model.generateContent(prompt), modelName);
-      const response = await result.response;
+      const response = result.response;
       const text = response.text();
-      return { text, modelName };
+      return { text };
     } catch (error) {
       lastError = error;
       console.warn(`Model ${modelName} failed, trying next fallback...`, error);
@@ -122,16 +122,11 @@ async function generateResponseWithFallback(prompt: string) {
 export async function POST(request: NextRequest) {
   let chatId: string | null = null;
   try {
-    console.log('=== /api/chat POST endpoint called');
-    
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
-      console.error('No session or user id');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.log('Session user:', session.user.id);
 
     const { message, mode, chatId: bodyChatId, deepSearch } = await parseRequestBody(request) as {
       message?: string;
@@ -149,28 +144,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Chat ID is required' }, { status: 400 });
     }
 
-    console.log('Saving user message for chat:', chatId);
-
-    // Find chat by ID only
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
     });
 
     if (!chat) {
-      console.error('Chat not found');
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    // Save user message to database
-    const userMessage = await prisma.message.create({
+    await prisma.message.create({
       data: {
         content: message,
         role: 'user',
         chatId,
       },
     });
-    
-    console.log('User message saved:', userMessage.id);
 
     // Create context based on selected mode
     let context = '';
@@ -252,13 +240,8 @@ STRUCTURE YOUR RESPONSE:
 
     const prompt = `${context}${deepSearchInstructions}${formattingInstructions}\n\nUser: ${message}\n\nProvide a helpful, professional, well-formatted response:`;
 
-    console.log('Calling Gemini API');
-    const { text, modelName } = await generateResponseWithFallback(prompt);
-    console.log('Gemini response received from model:', modelName);
-    
-    console.log('Gemini response received');
+    const { text } = await generateResponseWithFallback(prompt);
 
-    // Save assistant message to database
     const assistantMessage = await prisma.message.create({
       data: {
         content: text,
@@ -266,8 +249,6 @@ STRUCTURE YOUR RESPONSE:
         chatId,
       },
     });
-
-    console.log('Assistant message saved:', assistantMessage.id);
 
     return NextResponse.json({ 
       response: text,
