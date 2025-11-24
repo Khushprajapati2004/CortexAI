@@ -10,6 +10,8 @@ interface ChatInputProps {
   isLoading: boolean;
   isHydrating: boolean;
   isStreaming: boolean;
+  isListening: boolean;
+  interimTranscript: string;
   selectedMode: string;
   isDropdownOpen: boolean;
   hasMessages: boolean;
@@ -20,6 +22,7 @@ interface ChatInputProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: () => void;
   onStopGeneration: () => void;
+  onMicClick: () => void;
   onToggleDropdown: () => void;
   onModeSelect: (mode: { name: string; icon?: React.JSX.Element }) => void;
   onToggleAeroSearch: () => void;
@@ -30,6 +33,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isLoading,
   isHydrating,
   isStreaming,
+  isListening,
+  interimTranscript,
   selectedMode,
   isDropdownOpen,
   hasMessages,
@@ -40,6 +45,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onKeyDown,
   onSubmit,
   onStopGeneration,
+  onMicClick,
   onToggleDropdown,
   onModeSelect,
   onToggleAeroSearch,
@@ -48,17 +54,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     <div className={`w-full ${hasMessages ? 'mt-auto pb-6' : 'mt-5'}`}>
       <div className='max-w-4xl mx-auto px-4'>
         <div className='py-3 px-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm'>
-          <textarea
-            ref={inputRef}
-            placeholder='Ask a question...'
-            value={inputValue}
-            onChange={onInputChange}
-            onKeyDown={onKeyDown}
-            disabled={isLoading || isHydrating}
-            rows={1}
-            spellCheck={false}
-            className='outline-none text-sm w-full bg-transparent text-gray-700 dark:text-gray-300 placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50 resize-none leading-6 max-h-72'
-          />
+          <div className="relative">
+            <textarea
+              ref={inputRef}
+              placeholder='Ask a question...'
+              value={inputValue}
+              onChange={onInputChange}
+              onKeyDown={onKeyDown}
+              disabled={isLoading || isHydrating}
+              rows={1}
+              spellCheck={false}
+              className='outline-none text-sm w-full bg-transparent text-gray-700 dark:text-gray-300 placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50 resize-none leading-6 max-h-72'
+            />
+            {isListening && interimTranscript && (
+              <div className="absolute bottom-0 left-0 right-0 text-sm text-blue-500 dark:text-blue-400 italic pointer-events-none">
+                {interimTranscript}
+              </div>
+            )}
+          </div>
           <div className='flex items-center justify-between'>
             <div className='mt-4 flex items-center gap-2'>
               <Plus className='w-8 h-8 border rounded-full p-2 border-gray-400 dark:border-gray-600 cursor-pointer text-gray-700 dark:text-gray-300' />
@@ -85,7 +98,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               />
             </div>
             <div className='flex items-center mt-1 gap-3'>
-              <Mic className='h-9 w-9 rounded-full cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-2 text-gray-700 dark:text-gray-300' />
+              <button
+                onClick={onMicClick}
+                className={`h-9 w-9 rounded-full cursor-pointer p-2 transition-all duration-200 ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse'
+                    : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+                title={isListening ? 'Stop recording' : 'Start voice input'}
+              >
+                <Mic className='w-full h-full' />
+              </button>
               {isStreaming ? (
                 <button 
                   onClick={onStopGeneration}

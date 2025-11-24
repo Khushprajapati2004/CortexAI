@@ -26,7 +26,7 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user, account }) {
-      // Persist user id and provider to the token using type-safe approach
+      
       if (user) {
         // Store the NextAuth user ID in token
         token.id = user.id;
@@ -36,8 +36,6 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      // Send properties to the client with type safety
-      // Use the ID from the custom User table if available, otherwise use NextAuth ID
       return {
         ...session,
         user: {
@@ -55,9 +53,6 @@ export const authOptions: NextAuthOptions = {
         }
 
         console.log("SignIn callback - user.id:", user.id);
-
-        // ALWAYS use the user.id from NextAuth as the source of truth
-        // Don't look up by email - this causes ID mismatches!
         
         const existingUser = await prisma.user.findUnique({
           where: { id: user.id },
@@ -101,8 +96,6 @@ export const authOptions: NextAuthOptions = {
             console.log("User created successfully with ID:", user.id);
           } catch (createError: unknown) {
             console.error("Failed to create user:", createError);
-            // Even if creation fails, allow signin to proceed
-            // The user will be created on next API call if needed
           }
         }
 

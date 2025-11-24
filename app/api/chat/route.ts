@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
         context = 'You are CortexAI, an intelligent assistant for aerospace and aviation industries.';
     }
 
-    // Add deep search instructions if enabled
+    // Add deep search 
     let deepSearchInstructions = '';
     if (deepSearch) {
       deepSearchInstructions = `

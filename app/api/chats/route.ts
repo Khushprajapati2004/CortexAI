@@ -42,10 +42,6 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
         console.log('=== Creating chat for user:', userId);
 
-        // CRITICAL: Always use session.user.id - this is the source of truth!
-        // Don't look up the user or we might get a different ID
-        // Just verify the user exists, and if not, create them with the session ID
-
         let user = null;
         
         // Step 1: Try to find user by session ID only
@@ -147,7 +143,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Title is required' }, { status: 400 });
         }
 
-        // Step 5: CREATE CHAT - Use session user ID, NOT user object ID!
+      
             // Step 5: CREATE CHAT - Use database user ID!
             console.log('→ Creating chat for user:', user.id);
             const chat = await prisma.chat.create({

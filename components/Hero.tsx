@@ -10,6 +10,7 @@ import { FeedbackModal } from './chat/FeedbackModal'
 import { useChatHandlers } from '@/hooks/useChatHandlers'
 import { useChatEdit } from '@/hooks/useChatEdit'
 import { useFeedback } from '@/hooks/useFeedback'
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { markdownComponents } from '@/lib/markdownConfig'
 
 interface Message {
@@ -229,6 +230,24 @@ const Hero = () => {
         setFeedbackText,
     } = useFeedback()
 
+    const {
+        isListening,
+        transcript,
+        interimTranscript,
+        isSupported: isSpeechSupported,
+        startListening,
+        stopListening,
+        resetTranscript,
+    } = useSpeechRecognition()
+
+    // Update input value when speech transcript changes
+    useEffect(() => {
+        if (transcript) {
+            setInputValue(prev => prev + transcript)
+            resetTranscript()
+        }
+    }, [transcript, resetTranscript])
+
     useEffect(() => {
         scrollToBottom()
     }, [messages])
@@ -446,6 +465,19 @@ const Hero = () => {
         setInputValue(e.target.value)
     }
 
+    const handleMicClick = () => {
+        if (!isSpeechSupported) {
+            alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.')
+            return
+        }
+
+        if (isListening) {
+            stopListening()
+        } else {
+            startListening()
+        }
+    }
+
     const toggleDropdown = () => {
         setIsDropdownOpen(!isDropdownOpen)
     }
@@ -524,6 +556,8 @@ const Hero = () => {
                     isLoading={isLoading}
                     isHydrating={isHydrating}
                     isStreaming={!!streamingMessageId}
+                    isListening={isListening}
+                    interimTranscript={interimTranscript}
                     selectedMode={selectedMode}
                     isDropdownOpen={isDropdownOpen}
                     hasMessages={messages.length > 0}
@@ -534,6 +568,7 @@ const Hero = () => {
                     onKeyDown={handleKeyDown}
                     onSubmit={handleSubmit}
                     onStopGeneration={handleStopGeneration}
+                    onMicClick={handleMicClick}
                     onToggleDropdown={toggleDropdown}
                     onModeSelect={handleModeSelect}
                     onToggleAeroSearch={() => setIsAeroSearchActive(!isAeroSearchActive)}

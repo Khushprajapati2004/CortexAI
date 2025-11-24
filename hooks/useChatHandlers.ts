@@ -1,6 +1,6 @@
 // hooks/useChatHandlers.ts
 import { useState, useCallback } from 'react'
-import { ChatStorage } from '@/lib/chatStorage'
+// import { ChatStorage } from '@/lib/chatStorage'
 
 interface Message {
   id: string;
