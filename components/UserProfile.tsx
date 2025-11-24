@@ -55,7 +55,7 @@ const UserProfile = ({ user }: UserProfileProps) => {
         <div className="relative w-full" ref={dropdownRef}>
             <button
                 onClick={toggleProfile}
-                className="flex items-center w-full space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                className="flex items-center w-full space-x-2 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 transition-colors cursor-pointer"
             >
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-white" />
