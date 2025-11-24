@@ -1,4 +1,6 @@
 // components/chat/ModeSelector.tsx
+'use client';
+
 import { ChevronDown, ShoppingCart, Box, ScrollText, CircleCheckBig, BadgeDollarSignIcon, ShoppingBag, ToolCase } from 'lucide-react'
 import React from 'react'
 

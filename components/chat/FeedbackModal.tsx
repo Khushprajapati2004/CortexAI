@@ -1,4 +1,6 @@
 // components/chat/FeedbackModal.tsx
+'use client';
+
 import { AlertCircle, X } from 'lucide-react'
 import React from 'react'
 

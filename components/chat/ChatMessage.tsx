@@ -1,4 +1,6 @@
 // components/chat/ChatMessage.tsx
+'use client';
+
 import { Copy, PencilLine, ThumbsUp, ThumbsDown, RotateCcw, Flag, X } from 'lucide-react'
 import React from 'react'
 import ReactMarkdown from 'react-markdown'

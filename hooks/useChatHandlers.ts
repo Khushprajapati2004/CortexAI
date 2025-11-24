@@ -16,7 +16,8 @@ export const useChatHandlers = (
   currentChatId: string | null,
   selectedMode: string,
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>,
-  notifyChatListRefresh: () => void
+  notifyChatListRefresh: () => void,
+  streamIntervalRef: React.RefObject<NodeJS.Timeout | null>
 ) => {
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null)
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
@@ -60,9 +61,28 @@ export const useChatHandlers = (
       } else {
         clearInterval(streamInterval)
         setStreamingMessageId(null)
+        if (streamIntervalRef.current) {
+          streamIntervalRef.current = null
+        }
       }
     }, 20)
-  }, [setMessages, setStreamingMessageId])
+    
+    // Store interval ID for stopping
+    if (streamIntervalRef.current) {
+      clearInterval(streamIntervalRef.current)
+    }
+    streamIntervalRef.current = streamInterval
+    return streamInterval
+  }, [setMessages, setStreamingMessageId, streamIntervalRef])
+
+  const handleStopGeneration = useCallback(() => {
+    if (streamIntervalRef.current) {
+      clearInterval(streamIntervalRef.current)
+      streamIntervalRef.current = null
+    }
+    setStreamingMessageId(null)
+    setIsLoading(false)
+  }, [streamIntervalRef, setStreamingMessageId, setIsLoading])
 
   const handleRetry = useCallback(async (messageId: string) => {
     const messageIndex = messages.findIndex(msg => msg.id === messageId)
@@ -134,5 +154,7 @@ export const useChatHandlers = (
     retryingMessageId,
     streamResponse,
     setStreamingMessageId,
+    handleStopGeneration,
+    streamingMessageId,
   }
 }

@@ -1,4 +1,6 @@
 // components/Hero.tsx
+'use client';
+
 import { Info } from 'lucide-react'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { ChatStorage, StoredChat } from '@/lib/chatStorage'
@@ -42,6 +44,7 @@ const Hero = () => {
     const dropdownRef = useRef<HTMLDivElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+    const streamIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -181,14 +184,17 @@ const Hero = () => {
         handleRetry, 
         retryingMessageId,
         streamResponse,
-        setStreamingMessageId
+        setStreamingMessageId,
+        handleStopGeneration,
+        streamingMessageId
     } = useChatHandlers(
         messages, 
         setMessages, 
         currentChatId, 
         selectedMode, 
         setIsLoading,
-        notifyChatListRefresh
+        notifyChatListRefresh,
+        streamIntervalRef
     )
 
     const {
@@ -517,16 +523,20 @@ const Hero = () => {
                     inputValue={inputValue}
                     isLoading={isLoading}
                     isHydrating={isHydrating}
+                    isStreaming={!!streamingMessageId}
                     selectedMode={selectedMode}
                     isDropdownOpen={isDropdownOpen}
                     hasMessages={messages.length > 0}
+                    isAeroSearchActive={isAeroSearchActive}
                     inputRef={inputRef}
                     dropdownRef={dropdownRef}
                     onInputChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     onSubmit={handleSubmit}
+                    onStopGeneration={handleStopGeneration}
                     onToggleDropdown={toggleDropdown}
                     onModeSelect={handleModeSelect}
+                    onToggleAeroSearch={() => setIsAeroSearchActive(!isAeroSearchActive)}
                 />
             </section>
 

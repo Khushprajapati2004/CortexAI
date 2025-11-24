@@ -1,5 +1,7 @@
 // components/chat/ChatInput.tsx
-import { Plus, Dribbble, Mic, ArrowUp } from 'lucide-react'
+'use client';
+
+import { Plus, Dribbble, Mic, ArrowUp, CircleStop } from 'lucide-react'
 import React from 'react'
 import { ModeSelector } from './ModeSelector'
 
@@ -7,32 +9,40 @@ interface ChatInputProps {
   inputValue: string;
   isLoading: boolean;
   isHydrating: boolean;
+  isStreaming: boolean;
   selectedMode: string;
   isDropdownOpen: boolean;
   hasMessages: boolean;
+  isAeroSearchActive: boolean;
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: () => void;
+  onStopGeneration: () => void;
   onToggleDropdown: () => void;
   onModeSelect: (mode: { name: string; icon?: React.JSX.Element }) => void;
+  onToggleAeroSearch: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   inputValue,
   isLoading,
   isHydrating,
+  isStreaming,
   selectedMode,
   isDropdownOpen,
   hasMessages,
+  isAeroSearchActive,
   inputRef,
   dropdownRef,
   onInputChange,
   onKeyDown,
   onSubmit,
+  onStopGeneration,
   onToggleDropdown,
   onModeSelect,
+  onToggleAeroSearch,
 }) => {
   return (
     <div className={`w-full ${hasMessages ? 'mt-auto pb-6' : 'mt-5'}`}>
@@ -53,10 +63,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <div className='mt-4 flex items-center gap-2'>
               <Plus className='w-8 h-8 border rounded-full p-2 border-gray-400 dark:border-gray-600 cursor-pointer text-gray-700 dark:text-gray-300' />
 
-              <div className='flex items-center gap-1 cursor-pointer px-3 py-1.5 text-gray-700 dark:text-gray-300 border rounded-full border-gray-400 dark:border-gray-600'>
+              <button
+                onClick={onToggleAeroSearch}
+                className={`flex items-center gap-1 cursor-pointer px-3 py-1.5 border rounded-full transition-all duration-200 ${
+                  isAeroSearchActive
+                    ? 'bg-blue-500 text-white border-blue-500 dark:bg-blue-600 dark:border-blue-600'
+                    : 'text-gray-700 dark:text-gray-300 border-gray-400 dark:border-gray-600 hover:border-gray-500 dark:hover:border-gray-400'
+                }`}
+              >
                 <Dribbble className='w-4 h-4' />
                 <span className='text-sm font-normal'>AeroSearch</span>
-              </div>
+              </button>
               
               <ModeSelector
                 selectedMode={selectedMode}
@@ -69,13 +86,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </div>
             <div className='flex items-center mt-1 gap-3'>
               <Mic className='h-9 w-9 rounded-full cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-2 text-gray-700 dark:text-gray-300' />
-              <button 
-                onClick={onSubmit}
-                disabled={isLoading || isHydrating || !inputValue.trim()}
-                className='p-1.5 cursor-pointer rounded-full text-white bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors duration-200'
-              >
-                <ArrowUp className='w-5 h-5' />
-              </button>
+              {isStreaming ? (
+                <button 
+                  onClick={onStopGeneration}
+                  className='p-1 cursor-pointer rounded-full text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 text-sm font-medium'
+                  title="Stop generating"
+                >
+                  <CircleStop />
+                </button>
+              ) : (
+                <button 
+                  onClick={onSubmit}
+                  disabled={isLoading || isHydrating || !inputValue.trim()}
+                  className='p-1.5 cursor-pointer rounded-full text-white bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors duration-200'
+                >
+                  <ArrowUp className='w-5 h-5' />
+                </button>
+              )}
             </div>
           </div>
         </div>
