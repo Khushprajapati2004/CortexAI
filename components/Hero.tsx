@@ -37,6 +37,7 @@ const Hero = () => {
     const [currentChatId, setCurrentChatId] = useState<string | null>(null)
     const [currentChatMeta, setCurrentChatMeta] = useState<ChatMeta | null>(null)
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null)
+    const [isAeroSearchActive, setIsAeroSearchActive] = useState(false)
     
     const dropdownRef = useRef<HTMLDivElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -235,7 +236,8 @@ const Hero = () => {
         if (storedChatId) {
             hydrateChat(storedChatId)
         }
-    }, [hydrateChat])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     useEffect(() => {
         const handleChatSelect = (event: Event) => {
@@ -307,8 +309,11 @@ const Hero = () => {
             isFavorite: existingChat?.isFavorite || false,
             messages: serializedMessages,
         })
-        notifyChatListRefresh()
-    }, [currentChatId, currentChatMeta, messages, notifyChatListRefresh, selectedMode])
+        // Only notify on actual message changes, not on every render
+        if (messages.length > 0) {
+            notifyChatListRefresh()
+        }
+    }, [currentChatId, currentChatMeta, messages, selectedMode])
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -380,6 +385,7 @@ const Hero = () => {
                     message: userMessage,
                     mode: normalizedMode,
                     chatId: chatId,
+                    deepSearch: isAeroSearchActive,
                 }),
             })
 

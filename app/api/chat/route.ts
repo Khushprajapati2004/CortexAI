@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -133,10 +133,11 @@ export async function POST(request: NextRequest) {
 
     console.log('Session user:', session.user.id);
 
-    const { message, mode, chatId: bodyChatId } = await parseRequestBody(request) as {
+    const { message, mode, chatId: bodyChatId, deepSearch } = await parseRequestBody(request) as {
       message?: string;
       mode?: string;
       chatId?: string;
+      deepSearch?: boolean;
     };
     chatId = bodyChatId ?? null;
 
@@ -199,7 +200,57 @@ export async function POST(request: NextRequest) {
         context = 'You are CortexAI, an intelligent assistant for aerospace and aviation industries.';
     }
 
-    const prompt = `${context}\n\nUser: ${message}\n\nProvide a helpful, professional response:`;
+    // Add deep search instructions if enabled
+    let deepSearchInstructions = '';
+    if (deepSearch) {
+      deepSearchInstructions = `
+
+DEEP SEARCH MODE ACTIVATED:
+- Provide comprehensive, research-level responses with detailed analysis
+- Include multiple perspectives and considerations
+- Break down complex topics into clear sections
+- Cite relevant standards, regulations, or best practices when applicable
+- Provide step-by-step explanations for technical topics
+- Include examples, use cases, or scenarios where relevant
+- Consider safety, compliance, and industry best practices
+- Offer actionable insights and recommendations
+- Structure your response with clear headings and bullet points for readability
+- Go beyond surface-level answers to provide deep, expert-level insights`;
+    }
+
+    // Formatting instructions for all responses
+    const formattingInstructions = `
+
+RESPONSE FORMATTING GUIDELINES:
+- Use proper Markdown formatting for all responses
+- Use **bold** for emphasis and important terms
+- Use *italics* for technical terms or definitions
+- Use \`inline code\` for part numbers, codes, or technical identifiers
+- Use code blocks with \`\`\` for multi-line code or technical specifications
+- Use # for main headings, ## for subheadings, ### for sub-sections
+- Use bullet points (-) for lists
+- Use numbered lists (1., 2., 3.) for sequential steps or procedures
+- Use > for important notes or warnings
+- Use --- for horizontal dividers when separating major sections
+
+TABLE FORMATTING:
+- When presenting comparative data, specifications, or structured information, ALWAYS use Markdown tables
+- Format tables properly with | separators and alignment
+- Example table format:
+  | Column 1 | Column 2 | Column 3 |
+  |----------|----------|----------|
+  | Data 1   | Data 2   | Data 3   |
+  | Data 4   | Data 5   | Data 6   |
+- Use tables for: comparisons, specifications, pricing, schedules, part lists, compliance matrices, etc.
+- Align numbers to the right, text to the left in tables
+
+STRUCTURE YOUR RESPONSE:
+1. Start with a brief summary or direct answer
+2. Provide detailed explanation with proper formatting
+3. Use tables when presenting structured data
+4. End with actionable recommendations or next steps when applicable`;
+
+    const prompt = `${context}${deepSearchInstructions}${formattingInstructions}\n\nUser: ${message}\n\nProvide a helpful, professional, well-formatted response:`;
 
     console.log('Calling Gemini API');
     const { text, modelName } = await generateResponseWithFallback(prompt);

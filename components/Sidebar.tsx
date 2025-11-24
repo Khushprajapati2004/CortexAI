@@ -103,8 +103,11 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
     }, [user]);
 
     useEffect(() => {
-        fetchChats(isOpen);
-    }, [fetchChats, isOpen]);
+        if (isOpen) {
+            fetchChats(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -122,7 +125,7 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
         };
 
         const handleChatsRefresh = () => {
-            fetchChats();
+            fetchChats(false);
         };
 
         window.addEventListener('chat:active', handleActiveChat as EventListener);
@@ -132,7 +135,8 @@ const Sidebar = ({ isOpen, onClose, user }: SidebarProps) => {
             window.removeEventListener('chat:active', handleActiveChat as EventListener);
             window.removeEventListener('chat:list-refresh', handleChatsRefresh);
         };
-    }, [fetchChats]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // close menu when clicking outside
     useEffect(() => {
